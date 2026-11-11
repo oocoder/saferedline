@@ -40,13 +40,13 @@ describe('401 mapping', () => {
     env = await boot({ script: { chat: '401' } });
     const r = await env.post('/api/analyze', { text: CONTRACT });
     assertEnvelope(assert, r, 'NEAR_AUTH', 502, true);
-    assert.equal(r.json.error.message, 'NEAR AI Cloud rejected the API key (401) — check NEAR_API_KEY');
+    assert.equal(r.json.error.message, 'NEAR AI Cloud rejected the API key (401). Check NEAR_API_KEY.');
   });
   test('attestation 401 -> NEAR_AUTH (not ATTESTATION_UNAVAILABLE), contract not sent', async () => {
     env = await boot({ script: { attestation: '401' } });
     const r = await env.post('/api/analyze', { text: CONTRACT });
     assertEnvelope(assert, r, 'NEAR_AUTH', 502, false);
-    assert.match(r.json.error.message, /check NEAR_API_KEY/);
+    assert.match(r.json.error.message, /Check NEAR_API_KEY/);
     assert.equal(env.twin.chatRequests, 0);
     assertEnvelope(assert, await env.get('/api/attest'), 'NEAR_AUTH', 502, false);
   });

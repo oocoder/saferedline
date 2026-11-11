@@ -79,7 +79,7 @@ for (const s of samples) {
   if (ok) {
     await step(scope, 'verified badge', async () => {
       const t = await page.textContent('#vbadge');
-      assert(live ? /Hardware TEE verified/.test(t) : /Verified against RECORDED/.test(t), 'badge: ' + t.slice(0, 60));
+      assert(live ? /Hardware TEE verified/.test(t) : /Verified against recorded/.test(t), 'badge: ' + t.slice(0, 60));
       const atk = await page.locator('#attacks').isVisible();
       assert(live ? !atk : atk, live ? 'attack row visible in live mode' : 'attack row missing in twin mode');
     });
@@ -117,8 +117,8 @@ for (const s of samples) {
       await page.click('#ask');
       await page.waitForFunction(() => document.getElementById('ask-out').textContent.trim().length > 0 || document.getElementById('ask-err').textContent.trim().length > 0, null, { timeout: REPORT_TIMEOUT });
       const err = (await page.textContent('#ask-err')).trim(); assert(!err, 'ask error: ' + err.slice(0, 100));
-      assert(!/UNVERIFIED/.test(await page.textContent('#ask-out')), 'unverified answer');
-      assert(/Hardware TEE verified|Verified against RECORDED/.test(await page.textContent('#vbadge')), 'badge not verified after ask');
+      assert(!/unverified/i.test(await page.textContent('#ask-out')), 'unverified answer');
+      assert(/Hardware TEE verified|Verified against recorded/.test(await page.textContent('#vbadge')), 'badge not verified after ask');
     });
   }
   await step(scope, 'no console errors / CSP violations', async () => { assert(!problems.length, problems.join(' | ')); });

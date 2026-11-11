@@ -118,7 +118,7 @@ async function post(requestBody, pin) {
     res = pin && canPin(url) ? await deps.pinnedFetch(url, opts, pin) : await deps.fetch(url, opts);
     return { res, raw: Buffer.from(await res.arrayBuffer()) }; // exact bytes the enclave signs
   } catch (e) {
-    if (e?.code === 'TLS_PIN_MISMATCH') throw new AppError('TLS certificate does not match the attested gateway — contract NOT sent', { status: 502, code: 'ATTESTATION_FAILED', stage: 'attestation', contractSent: false });
+    if (e?.code === 'TLS_PIN_MISMATCH') throw new AppError('TLS certificate does not match the attested gateway. Contract not sent.', { status: 502, code: 'ATTESTATION_FAILED', stage: 'attestation', contractSent: false });
     if (e?.name === 'TimeoutError' || e?.name === 'AbortError') {
       throw new AppError(`The model did not answer within ${Math.round(cfg.timeoutMs / 1000)}s`, { status: 504, code: 'INFERENCE_TIMEOUT', stage: 'inference', contractSent: true });
     }
@@ -149,7 +149,7 @@ async function chat(messages, { maxTokens = 4000, json = false, pin = null } = {
     }
   }
   if (!res.ok) {
-    if (res.status === 401 || res.status === 403) throw new AppError(`NEAR AI Cloud rejected the API key (${res.status}) — check NEAR_API_KEY`, { status: 502, code: 'NEAR_AUTH', stage: 'inference', contractSent: true });
+    if (res.status === 401 || res.status === 403) throw new AppError(`NEAR AI Cloud rejected the API key (${res.status}). Check NEAR_API_KEY.`, { status: 502, code: 'NEAR_AUTH', stage: 'inference', contractSent: true });
     throw new AppError(`NEAR AI Cloud returned HTTP ${res.status}`, { status: 502, code: 'INFERENCE_FAILED', stage: 'inference', contractSent: true });
   }
   let body;
@@ -185,9 +185,9 @@ async function attestOrThrow() {
   const attestation = await cfg.attest(cfg.model, cfg.apiKey);
   if (!attestation.verified) {
     if (attestation.unavailable?.length) {
-      throw new AppError(`Could not complete attestation: ${attestation.unavailable.join(', ')} unreachable — failing closed. Contract was NOT sent.`, { status: 503, code: 'ATTESTATION_UNAVAILABLE', stage: 'attestation', attestation });
+      throw new AppError(`Couldn't complete attestation: ${attestation.unavailable.join(', ')} unreachable. We stopped, and the contract was not sent.`, { status: 503, code: 'ATTESTATION_UNAVAILABLE', stage: 'attestation', attestation });
     }
-    throw new AppError('TEE attestation failed — contract was NOT sent to the model.', { status: 502, code: 'ATTESTATION_FAILED', stage: 'attestation', attestation });
+    throw new AppError('TEE attestation failed. The contract was not sent to the model.', { status: 502, code: 'ATTESTATION_FAILED', stage: 'attestation', attestation });
   }
   return attestation;
 }

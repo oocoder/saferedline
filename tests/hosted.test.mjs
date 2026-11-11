@@ -33,7 +33,7 @@ describe('HOSTED_DEMO: samples only', () => {
     for (const text of [CONTRACT, sample(SAMPLE_IDS[0]) + ' tweak', sample(SAMPLE_IDS[0]).slice(0, -5)]) {
       const r = await env.post('/api/analyze', { text });
       assertEnvelope(assert, r, 'SAMPLES_ONLY', 403, false);
-      assert.equal(r.json.error.message, 'Hosted demo accepts the bundled fictional samples only — run locally for real contracts');
+      assert.equal(r.json.error.message, 'The hosted demo accepts the bundled fictional samples only. Run SafeRedline locally for real contracts.');
     }
     assert.equal(env.twin.chatRequests, 0);
     assert.equal(env.twin.requests.length, 0, 'not even an attestation fetch');

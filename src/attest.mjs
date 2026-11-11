@@ -436,12 +436,12 @@ export async function attestModel(model, apiKey) {
     report = await fetchAttestation(model, nonce, apiKey);
   } catch (e) {
     if (e instanceof HttpError && (e.status === 401 || e.status === 403)) {
-      throw new AppError(`NEAR AI Cloud rejected the API key (${e.status}) — check NEAR_API_KEY`, { status: 502, code: 'NEAR_AUTH', stage: 'attestation' });
+      throw new AppError(`NEAR AI Cloud rejected the API key (${e.status}). Check NEAR_API_KEY.`, { status: 502, code: 'NEAR_AUTH', stage: 'attestation' });
     }
-    throw new AppError(`NEAR attestation report unreachable (${e.message}) — failing closed`, { status: 503, code: 'ATTESTATION_UNAVAILABLE', stage: 'attestation' });
+    throw new AppError(`NEAR attestation report unreachable (${e.message}). We stopped here.`, { status: 503, code: 'ATTESTATION_UNAVAILABLE', stage: 'attestation' });
   }
   if (!report || typeof report !== 'object') {
-    throw new AppError('NEAR attestation report was not valid JSON — failing closed', { status: 503, code: 'ATTESTATION_UNAVAILABLE', stage: 'attestation' });
+    throw new AppError('NEAR attestation report was not valid JSON. We stopped here.', { status: 503, code: 'ATTESTATION_UNAVAILABLE', stage: 'attestation' });
   }
   const checks = [];
   const models = Array.isArray(report.model_attestations) ? report.model_attestations : [];
