@@ -16,7 +16,7 @@ Rules: [submission-research.md](submission-research.md). Submit once, before 202
 | nearAddress | `alexmaldonado.near` (confirmed by user) HUMAN: mainnet payout account |
 | projectUrl | `https://github.com/oocoder/saferedline` (repo is public) |
 | demoUrl | [X post URL, pending: HUMAN posts first; must be `x.com/AlexBuildsNY/status/...`] |
-| idea | text below (1797 characters; limit 2000) |
+| idea | text below (1629 characters; limit 2000) |
 | website | leave EMPTY (spam trap: any non-empty value rejects the submission) |
 | consent | `true`, only after the human agrees to this notice verbatim: "I agree that the organizers may use these details to review our submission and contact us about this hackathon." |
 
@@ -24,18 +24,24 @@ Alternative path: HACKATHON.md allows an agent to file the submission via the AP
 
 Field name note: the form labels and the API names differ slightly (`leadName` in the API for team lead; `size` for team size). If submitting by API, use the names in [submission-research.md](submission-research.md) and include a `requestId` UUID; show the human the full payload before sending.
 
-### idea (1797 characters)
+### idea (1629 characters)
 
 ```
-Contracts and NDAs are the documents you cannot paste into a normal AI chatbot: they are confidential, often under NDA themselves, and a regular LLM API gives you no proof of where your text went or whether it was kept.
+An NDA is the one document you can't paste into a chatbot. It's confidential, often under NDA itself, and a normal AI service gives you a privacy policy, not proof.
 
-SafeRedline is a contract and NDA reviewer you run on your own machine. You load a document and an LLM running inside a NEAR AI Cloud confidential VM (Intel TDX plus NVIDIA GPU confidential computing) returns risky clauses with verbatim quotes, plain-English explanations, copy-pasteable redlines and missing protections. SafeRedline itself stores nothing.
+SafeRedline is a contract and NDA reviewer you run on your own computer. You load a contract. It flags the risky clauses, quotes them word for word, explains the trap in plain English, and drafts a fairer replacement you can paste back. SafeRedline stores nothing.
 
-What makes it verifiable: before any contract is sent, it fetches the gateway and model attestations bound to a fresh nonce and checks the Intel TDX quote, debug-off, the signing key and nonce in the quote, the compose hash, the RTMR3 log, and NVIDIA's signed GPU verdicts (ES384, nonce, expiry). The contract then travels only over TLS pinned to the key bound inside the attested gateway quote. Afterwards it checks the enclave's per-response signature over the exact request and response bytes against the attested key. Everything fails closed: missing evidence is a failure, and a failed check means the contract is not sent. Live on 2026-11-11, 23 of 23 counted checks passed. 106 offline tests plus a simulated-enclave twin cover the failure paths.
+The AI runs on NEAR AI Cloud, inside a hardware "locked room" (a TEE: Intel TDX plus NVIDIA confidential GPUs). The part I care about most is that you can check the lock.
 
-Honest limits: enclave software is identified by hash, not audited or pinned to a published release; the attested gateway and model still see plaintext; our local server is not attested (small open code, no persistence, a test asserts nothing is logged or written).
+Before your contract leaves your machine, SafeRedline asks the room to prove itself, using a fresh random number so an old proof can't be replayed. It checks Intel's and NVIDIA's signed evidence, confirms the connection is pinned to the key inside that room, and only then sends the text. When the answer comes back, it checks the room's signature on the exact words sent and received.
 
-NEAR is load-bearing: NEAR AI Cloud runs the open-weight model in the TEE and exposes the attestation and signature endpoints we verify against. Without it this is a chatbot with a privacy policy.
+If any check fails, nothing is sent. Missing evidence counts as a failure too. Live, every counted check passed (23 before sending, 29 with the signed answer), and 100+ offline tests plus a simulated twin cover the failure paths.
+
+What it can't prove: the enclave software is identified by its hash, not audited; the NEAR gateway and model still see your text inside the room; and my own local server isn't attested.
+
+NEAR makes this possible. Without NEAR AI Cloud, this is a chatbot with a promise. With it, privacy is something you can check.
+
+Other AI contract tools promise zero retention. SafeRedline proves where your contract ran.
 ```
 
 ### Track choice
@@ -48,7 +54,7 @@ NEAR is load-bearing: NEAR AI Cloud runs the open-weight model in the TEE and ex
 
 Requirements (Build City hackpack section 6): public post; says it was built at NEAR HACKATHON; tags @buidlcity, @NEARProtocol, @nearlegion and #NEARHackathon (all four are in both variants); video or screenshots attached. Counts treat the link as 23 characters (how X counts links). @NearBuilders is optional (recount if added).
 
-**Variant A (278 chars)** problem first, then the one moment, then NEAR's role:
+**POSTED (variant A) (278 chars)** problem first, then the one moment, then NEAR's role:
 
 ```
 Can't paste an NDA into a chatbot. SafeRedline reviews it in a NEAR AI Cloud TEE, only after verifying the enclave (Intel TDX, NVIDIA, pinned TLS) and checking the signed answer. Built at NEAR HACKATHON @buidlcity @NEARProtocol @nearlegion #NEARHackathon https://github.com/oocoder/saferedline
