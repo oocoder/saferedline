@@ -2,41 +2,27 @@
 
 Source rules: [submission-research.md](submission-research.md). Window ends **2026-11-14 23:59 UTC**. Submission cannot be edited afterward (changes via https://nearhackathon.com/request-changes). Submit at https://nearhackathon.com/#apply.
 
-## Form fields
+## Final form payload (copy-paste ready)
 
-| Field | Value | Who |
-|---|---|---|
-| projectName | SafeRedline | prefilled |
-| leadName | TBD | human |
-| email | TBD (max 160 chars) | human |
-| size | TBD (one of: 1, 2 - 4, 4 - 6, 6 - 8, 8+) | human |
-| tracks | `privacy` (primary) | prefilled |
-| nearAddress | mainnet NEAR account for payout (e.g. name.near); never invent one | **human only** |
-| projectUrl | TBD: public GitHub repo URL | human, after repo is public |
-| demoUrl | TBD: URL of the public X post | **human only** (posting on X) |
-| idea | draft below (20-2000 chars) | prefilled |
-| consent | tick only after agreeing to the notice verbatim: "I agree that the organizers may use these details to review our submission and contact us about this hackathon." | human |
+Rules: [submission-research.md](submission-research.md). Submit once, before 2026-11-14 23:59 UTC, only after the repo is public AND the X post is live. Items marked HUMAN are for the person submitting; an agent must not invent or post them.
 
-Do not include a `website` field if submitting via API (spam trap). Submit once; a repeat repo returns 409.
+| Field | Value |
+|---|---|
+| projectName | `SafeRedline` |
+| teamLead | [confirmed by user, filled at submit time] |
+| email | [confirmed by user, filled at submit time] (max 160 chars; do not write it into this public repo) |
+| teamSize | `Solo builder` (API value: `1`) |
+| tracks | `["privacy"]` |
+| nearAddress | `alexmaldonado.near` (confirmed by user) HUMAN: mainnet payout account |
+| projectUrl | `https://github.com/oocoder/saferedline` (repo is public) |
+| demoUrl | [X post URL, pending: HUMAN posts first; must be `x.com/AlexBuildsNY/status/...`] |
+| idea | text below (1797 characters; limit 2000) |
+| website | leave EMPTY (spam trap: any non-empty value rejects the submission) |
+| consent | `true`, only after the human agrees to this notice verbatim: "I agree that the organizers may use these details to review our submission and contact us about this hackathon." |
 
-### Track choice
+Field name note: the form labels and the API names differ slightly (`leadName` in the API for team lead; `size` for team size). If submitting by API, use the names in [submission-research.md](submission-research.md) and include a `requestId` UUID; show the human the full payload before sending.
 
-- **privacy**: fits directly (private AI, TEE, NEAR AI Cloud). Select it.
-- **security**: arguable, since the project is attestation verification, but the product problem is data confidentiality, not defending a system. Add it only if the human is comfortable defending the fit; the rules say add other tracks only if the project genuinely fits. Recommendation: `privacy` only, or `privacy` + `security` if the form encourages every fitting track.
-- `business`: not selected; there is no revenue model in the build.
-
-## X post draft (human posts; agents never post)
-
-Requirements: public, states it was built at NEAR HACKATHON, tags @NEARProtocol and #NEARHackathon, video or screenshots attached.
-
-```
-An NDA is the one document you can't paste into a chatbot. SafeRedline reviews contracts inside a NEAR AI Cloud TEE: attestation checked per request with a fresh nonce, every answer signed by the enclave, nothing stored. Built at NEAR HACKATHON @buidlcity @NEARProtocol @nearlegion #NEARHackathon
-Demo + repo: <repo URL>. What would you want it to flag?
-```
-
-(Check length before posting; trim the last line if over the limit.)
-
-## "What did you build?" draft (under 2000 chars)
+### idea (1797 characters)
 
 ```
 Contracts and NDAs are the documents you cannot paste into a normal AI chatbot: they are confidential, often under NDA themselves, and a regular LLM API gives you no proof of where your text went or whether it was kept.
@@ -49,6 +35,38 @@ Honest limits: enclave software is identified by hash, not audited or pinned to 
 
 NEAR is load-bearing: NEAR AI Cloud runs the open-weight model in the TEE and exposes the attestation and signature endpoints we verify against. Without it this is a chatbot with a privacy policy.
 ```
+
+### Track choice
+
+- **privacy**: fits directly (private AI, TEE, NEAR AI Cloud). Selected.
+- **security**: arguable because the project is attestation verification, but the product problem is data confidentiality. Not selected; add only if the human can defend the fit.
+- `business`: not selected; there is no revenue model in the build.
+
+## X post (HUMAN posts; agents never post)
+
+Requirements: public post; says it was built at NEAR HACKATHON; tags @NEARProtocol and #NEARHackathon; video or screenshots attached. Counts below treat the link as 23 characters (how X counts links). Optional tags: @buidlcity @nearlegion @NearBuilders (check the length if you add them).
+
+**Variant A (273 chars)** problem first, then the one moment, then NEAR's role:
+
+```
+You can't paste an NDA into a chatbot. SafeRedline reviews it inside a NEAR AI Cloud TEE, but only after verifying the enclave live (Intel TDX + NVIDIA, TLS pinned) and checking the signed answer. Built at NEAR HACKATHON @NEARProtocol #NEARHackathon https://github.com/oocoder/saferedline
+```
+
+**Variant B (262 chars)** leads with the trust angle instead of the user problem:
+
+```
+A privacy policy isn't proof. SafeRedline sends your NDA to a NEAR AI Cloud TEE only after verifying the enclave, then checks the enclave's signature on the answer. Built at NEAR HACKATHON @NEARProtocol #NEARHackathon https://github.com/oocoder/saferedline What should it flag?
+```
+
+Tip: put a question as the first reply, e.g. "What clause would you want it to catch first?"
+
+### Posting checklist (HUMAN)
+
+- [ ] Repo is public and `https://github.com/oocoder/saferedline` opens while logged out
+- [ ] Attach `.work/demo/saferedline-demo.mp4` (a live-run version is coming; use it if ready) or the 4 stills: `.work/demo/still-1-verified-panel.png`, `still-2-high-risk-report.png`, `still-3-redline-card.png`, `still-4-contract-not-sent.png`
+- [ ] Post from @AlexBuildsNY; the `demoUrl` must be an `x.com/AlexBuildsNY/status/...` URL; confirm the text says "Built at NEAR HACKATHON" and tags @NEARProtocol and #NEARHackathon
+- [ ] Open the post logged out to confirm it is public, then copy its URL
+- [ ] Paste the URL into `demoUrl`; submit once
 
 ## Demo video shot list (60 seconds or less)
 

@@ -287,8 +287,8 @@ A signature failure is **not** an error. It returns 200 with `verified: false`.
 
 ## Key file paths
 
-- /Users/alexmaldonado/projects/saferedline/src/attest.mjs: defects #1–#8 and #23–#25; the `deps` seam goes here.
-- /Users/alexmaldonado/projects/saferedline/src/near.mjs: #9–#18; `setNearDeps` goes here.
-- /Users/alexmaldonado/projects/saferedline/src/server.mjs: #19–#22; `createServer` goes here.
-- /Users/alexmaldonado/projects/saferedline/scripts/verify_tee.mjs: line 24, same raw-bytes fix as #9.
-- /Users/alexmaldonado/projects/saferedline/node_modules/@phala/dcap-qvl/src/collateral.js: lines 194 and 325–331. `getCollateral` returns JSON-safe collateral, and `getCollateralAndVerify` uses wall-clock time and fetch calls with no timeout.
+- src/attest.mjs: defects #1–#8 and #23–#25; the `deps` seam goes here.
+- src/near.mjs: #9–#18; `setNearDeps` goes here.
+- src/server.mjs: #19–#22; `createServer` goes here.
+- scripts/verify_tee.mjs: line 24, same raw-bytes fix as #9.
+- node_modules/@phala/dcap-qvl/src/collateral.js: lines 194 and 325–331. `getCollateral` returns JSON-safe collateral, and `getCollateralAndVerify` uses wall-clock time and fetch calls with no timeout.

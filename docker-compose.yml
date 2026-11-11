@@ -1,0 +1,27 @@
+# SafeRedline hosted demo (bundled fictional samples only). This file is what a dstack CVM would attest:
+# every setting that affects behaviour is visible here. Secrets come from the environment, never from the image.
+#   NEAR_API_KEY=sk-... ALLOWED_HOSTS=demo.example.org docker compose up -d --build
+services:
+  saferedline:
+    build: .
+    # For an attested deployment, build once, push, and replace with an immutable digest, e.g.
+    #   image: ghcr.io/<org>/saferedline@sha256:<digest>
+    image: ${SAFEREDLINE_IMAGE:-saferedline:demo}
+    environment:
+      NEAR_API_KEY: ${NEAR_API_KEY:?set NEAR_API_KEY in the environment}
+      HOSTED_DEMO: "1"            # samples only, per-IP + daily rate limits, hosted-demo health mode
+      HOST: 0.0.0.0               # explicit public bind (required with HOSTED_DEMO=1)
+      PORT: "3000"
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?set ALLOWED_HOSTS to the public hostname}
+      TRUST_PROXY: ${TRUST_PROXY:-1}   # right-most X-Forwarded-For = client IP; set 0 if not behind a reverse proxy
+      # Optional: pin the attested NEAR model enclave software: EXPECTED_COMPOSE_HASH
+      # Optional tuning: DEMO_ANALYZE_LIMIT=5 DEMO_ASK_LIMIT=20 DEMO_WINDOW_MS=600000 DEMO_DAILY_CAP=200
+    ports:
+      - "3000:3000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
