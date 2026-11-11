@@ -45,8 +45,8 @@ export function resolveScript(name) {
   return out;
 }
 
-/** Start a twin and point the app at it. `realSigner:true` keeps the fixture's real enclave key (wrong-signer demo). */
-export async function installTwin({ script = {}, apiKey = 'sk-twin-test-key', timeoutMs = 5000, realSigner = false } = {}) {
+/** Start a twin and point the app at it. (`realSigner` is accepted for old callers and ignored: the attestation is never altered.) */
+export async function installTwin({ script = {}, apiKey = 'sk-twin-test-key', timeoutMs = 5000 } = {}) {
   const twin = createTwin();
   await twin.listen();
   const saved = { deps: { ...deps, timeouts: { ...deps.timeouts } }, cfg: { ...cfg, sigRetry: { ...cfg.sigRetry } } };
@@ -75,13 +75,12 @@ export async function installTwin({ script = {}, apiKey = 'sk-twin-test-key', ti
     apiKey, timeoutMs: scriptTimeout || timeoutMs,
     model: fixture.model,
     sigRetry: { tries: 5, delays: [5, 5, 5, 5] },
-    // SIGNER SWAP (twin only): the recorded attestation binds NEAR's real enclave key, whose private half we do not
-    // have, so the twin cannot produce a signature that verifies against it. For the happy path we keep every real
-    // check on the recorded evidence but replace the attested signer list with the twin's local test key. This means a
-    // twin "verified" proves the pipeline logic, NOT that a real enclave signed the answer; responses carry
-    // `twinSignerNote` to say so. `realSigner: true` keeps the real key to demonstrate the wrong-signer failure.
-    twinSignerNote: realSigner ? undefined : 'Twin signs responses with a local test key; live mode requires the attested enclave key.',
-    attest: realSigner ? attestModel : async (m, k) => { const a = await attestModel(m, k); a.signingAddresses = [wallet.address]; return a; },
+    // The attestation is NEVER mutated: signingAddresses stay the recorded enclave's real key. The twin signs with a local
+    // test key, so `sig_attested` is emitted as informational ("simulated") in twin mode (see verifyResponseSignature), and
+    // responses carry `twinSigner` + `twinSignerNote`. A twin "verified" therefore proves the pipeline logic and the counted
+    // checks (hashes, ECDSA recovery, model), not that a real enclave signed the answer.
+    twinSignerNote: 'Twin signs responses with a local test key; live mode requires the attested enclave key.',
+    twinSigner: wallet.address,
   });
   const restore = async () => { setDeps(saved.deps); setNearDeps(saved.cfg); await twin.close(); };
   return { twin, restore };

@@ -63,11 +63,6 @@ describe('twin honesty', () => {
     const a = await env.post('/api/ask', { text: CONTRACT, question: 'q?' });
     assert.ok(a.json.twinSignerNote);
   });
-  test('without the swap (realSigner) there is no twinSignerNote', async () => {
-    env = await boot({ realSigner: true });
-    const r = await env.post('/api/analyze', { text: CONTRACT });
-    assert.equal(r.json.twinSignerNote, undefined);
-  });
 });
 
 describe('verify_tee.mjs never prints a stack trace', () => {

@@ -127,11 +127,27 @@ describe('failures', () => {
     assert.equal(r.json.verified, false);
     assert.equal(env.twin.requests.filter((x) => x.startsWith('GET /v1/signature/')).length, 1);
   });
-  test('real fixture signer vs twin signature: natural wrong-signer', async () => {
-    env = await boot({ realSigner: true });
+  test('twin never claims the attested key signed: sig_attested is informational/simulated, attestation untouched', async () => {
+    env = await boot();
+    const r = await analyze();
+    const { fixture, wallet } = await import('./twin/near-twin.mjs');
+    assert.deepEqual(r.json.attestation.signingAddresses, fixture.report.model_attestations.map((m) => m.signing_address), 'recorded enclave key, not the twin wallet');
+    assert.ok(!r.json.attestation.signingAddresses.map((x) => x.toLowerCase()).includes(wallet.address.toLowerCase()));
+    assert.equal(r.json.twinSigner, wallet.address);
+    const c = r.json.signature.checks.find((x) => x.id === 'sig_attested');
+    assert.equal(c.informational, true); assert.equal(c.pass, false);
+    assert.equal(c.detail, 'simulated (twin): response signed by a local test key, not an attested enclave key');
+    assert.equal(r.json.verified, true);
+    const counted = (cs) => cs.filter((x) => !x.informational);
+    assert.ok(counted(r.json.signature.checks).every((x) => x.pass));
+    assert.equal(counted(r.json.signature.checks).length, 5, 'sig_req, sig_res, sig_model, sig_algo, sig_ecdsa');
+    assert.equal(counted(r.json.attestation.checks).length, r.json.attestation.checks.length - 2, 'tls_bound (skipped) and measurement_pinning are informational');
+  });
+  test('twin wrong_signer fails on counted sig_ecdsa (signature does not match the claimed address)', async () => {
+    env = await boot({ script: { signature: 'wrong_signer' } });
     const r = await analyze();
     assert.equal(r.json.verified, false);
-    assert.ok(r.json.signature.checks.some((c) => c.id === 'sig_attested' && !c.pass));
+    assert.deepEqual(r.json.signature.checks.filter((c) => !c.pass && !c.informational).map((c) => c.id), ['sig_algo', 'sig_ecdsa']);
   });
   test('NEAR_AUTH on chat 401', async () => {
     env = await boot({ script: { chat: '401' } });

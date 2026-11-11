@@ -12,6 +12,7 @@ export const cfg = {
   model: process.env.NEAR_MODEL || 'z-ai/glm-5.3-flash',
   attest: attestModel,
   twinSignerNote: undefined, // set only by the twin (tests/twin/install.mjs)
+  twinSigner: undefined,     // the twin's local test signing address (never an attested key)
   timeoutMs: Number(process.env.NEAR_TIMEOUT_MS) || 90000,
   sigRetry: { tries: 5, delays: [300, 600, 1200, 2000] },
   // Serialize the request as pure-ASCII JSON (\uXXXX escapes). Valid JSON either way; guards against the
@@ -31,7 +32,7 @@ export async function listTeeModels() {
   const { data = [] } = await res.json();
   return data
     .filter((m) => m.owned_by === 'nearai' && (m.output_modalities || ['text']).includes('text') && !/embedding|reranker|whisper|flux|privacy-filter/i.test(m.id))
-    .map((m) => ({ id: m.id, name: m.name, context: m.context_length }));
+    .map((m) => ({ id: m.id, name: m.name, context: m.context_length, ...(m.simulated ? { simulated: true } : {}) }));
 }
 
 export const SYSTEM_PROMPT = `You are SafeRedline, a meticulous corporate and commercial contracts analyst running inside a hardware-isolated Trusted Execution Environment (TEE).
@@ -218,7 +219,7 @@ export async function analyzeContract(contractText) {
     verified: attestation.verified && signature.verified,
     analysis, analysisParseError, jsonMode: r.jsonMode,
     attestation, signature, channel: channelOf(attestation),
-    ...(cfg.twinSignerNote ? { twinSignerNote: cfg.twinSignerNote } : {}),
+    ...(cfg.twinSignerNote ? { twinSignerNote: cfg.twinSignerNote, twinSigner: cfg.twinSigner } : {}),
     usage: r.body.usage ?? null,
     model: cfg.model,
     retention: { persisted: false, enforcedBy: 'no write paths in src/; sentinel test tests/pipeline.test.mjs' },
@@ -241,6 +242,6 @@ export async function askFollowUp(contractText, question) {
   return {
     verified: attestation.verified && signature.verified,
     answer,
-    attestation, signature, channel: channelOf(attestation), ...(cfg.twinSignerNote ? { twinSignerNote: cfg.twinSignerNote } : {}), model: cfg.model, ms: Date.now() - t0,
+    attestation, signature, channel: channelOf(attestation), ...(cfg.twinSignerNote ? { twinSignerNote: cfg.twinSignerNote, twinSigner: cfg.twinSigner } : {}), model: cfg.model, ms: Date.now() - t0,
   };
 }

@@ -160,11 +160,11 @@ export function createTwin({ tls } = {}) {
           if (m === 'tampered_res') resH = sha256hex(Buffer.concat([rec.res, Buffer.from(' ')]));
           if (m === 'tampered_req') reqH = sha256hex(Buffer.concat([rec.req, Buffer.from(' ')]));
           if (m === 'model_mismatch') model = 'other/model';
-          if (m === 'wrong_signer') w = otherWallet;
+          if (m === 'wrong_signer') w = otherWallet; // signs with a key that is NOT the one it claims below -> sig_ecdsa fails
           const text = m === 'no_model_prefix' ? `${reqH}:${resH}` : `${model}:${reqH}:${resH}`;
-          return json(200, { text, signature: await w.signMessage(text), signing_address: w.address, signing_algo: 'ecdsa' });
+          return json(200, { text, signature: await w.signMessage(text), signing_address: m === 'wrong_signer' ? wallet.address : w.address, signing_algo: 'ecdsa' });
         }
-        if (req.method === 'GET' && u.pathname === '/v1/models') return json(200, { data: [{ id: fixture.model, owned_by: 'nearai', name: 'twin' }] });
+        if (req.method === 'GET' && u.pathname === '/v1/models') return json(200, { simulated: true, data: [{ id: fixture.model, owned_by: 'nearai', name: 'twin', simulated: true }] });
         json(404, { error: { message: 'twin: no route' } });
       } catch (e) { json(500, { error: { message: String(e.message) } }); }
     });

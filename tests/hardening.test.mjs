@@ -88,12 +88,14 @@ describe('review item 7: informational pinning check', () => {
     process.env.EXPECTED_COMPOSE_HASH = 'a0e3c6f4f21a60ea3f5c96bc7ef319b03a184ca2049605399275fbcea74e8c5f';
     try {
       const ok = await attestModel(fixture.model, '');
-      assert.match(ok.checks.find((x) => x.id === 'measurement_pinning').detail, /pinned ✓/);
+      assert.match(ok.checks.find((x) => x.id === 'measurement_pinning').detail, /pinned, matches ✓/);
       assert.equal(ok.verified, true);
       process.env.EXPECTED_COMPOSE_HASH = 'ff'.repeat(32);
       const bad = await attestModel(fixture.model, '');
       assert.equal(bad.verified, false);
       assert.ok(failedIds(bad).includes('model:compose_pinned'));
+      const mp = bad.checks.find((x) => x.id === 'measurement_pinning');
+      assert.equal(mp.pass, false); assert.match(mp.detail, /pinned, MISMATCH ✗/);
     } finally { delete process.env.EXPECTED_COMPOSE_HASH; }
   });
 });

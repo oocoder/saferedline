@@ -392,8 +392,13 @@ export async function attestModel(model, apiKey) {
     checks.push({ ...check('tls_bound', 'gateway', 'TLS certificate matches the attested gateway', pass, detail), ...(skipped ? { informational: true } : {}) });
   }
   const pinned = (process.env.EXPECTED_COMPOSE_HASH || '').toLowerCase();
-  // Informational only (excluded from `verified`): is the enclave software pinned to a known-good compose hash?
-  checks.push({ ...check('measurement_pinning', 'info', 'Measurement pinning', !!pinned, pinned ? `pinned ✓ ${pinned.slice(0, 16)}…` : 'not configured (set EXPECTED_COMPOSE_HASH)'), informational: true });
+  // Informational only (excluded from `verified`; a mismatch ALSO fails the counted `compose_pinned` check).
+  const attestedHashes = modelRes.map((r) => r.composeHash);
+  const pinMatches = !!pinned && attestedHashes.length > 0 && attestedHashes.every((h) => h === pinned);
+  const pinDetail = !pinned ? 'not configured (set EXPECTED_COMPOSE_HASH)'
+    : pinMatches ? `pinned, matches ✓ ${pinned.slice(0, 16)}…`
+      : `pinned, MISMATCH ✗ expected ${pinned.slice(0, 16)}… but attested ${attestedHashes.map((h) => (h ? h.slice(0, 16) + '…' : 'none')).join(', ') || 'none'}`;
+  checks.push({ ...check('measurement_pinning', 'info', 'Measurement pinning', pinMatches, pinDetail), informational: true });
 
   const all = results.filter(Boolean);
   const unavailable = [...new Set(all.flatMap((r) => r.unavailable))];
@@ -454,8 +459,13 @@ export async function verifyResponseSignature({ chatId, model, requestBody, resp
     S('sig_ecdsa', 'ECDSA signature recovers to the signing address', recoveredOk, recovered);
     checks[algoIdx].pass = recoveredOk && (algo === null || String(algo).toLowerCase() === 'ecdsa');
     checks[algoIdx].detail = recoveredOk ? String(algo ?? 'not reported') : 'recovery failed';
-    S('sig_attested', 'Signer = key attested inside the TEE above', signers.length > 0 && signers.includes(recovered.toLowerCase()), signers.length ? recovered : 'no attested signer to compare against');
-    return { verified: checks.every((c) => c.pass), ...base, signingAddress: sig.signing_address ?? null, signingAlgo: algo, text, checks };
+    if (deps.evidence === 'recorded') {
+      // Twin: the recorded attestation binds NEAR's real key; the twin signs with a local test key. Never pretend otherwise.
+      checks.push({ ...check('sig_attested', 'signature', 'Signer = key attested inside the TEE above', false, 'simulated (twin): response signed by a local test key, not an attested enclave key'), informational: true });
+    } else {
+      S('sig_attested', 'Signer = key attested inside the TEE above', signers.length > 0 && signers.includes(recovered.toLowerCase()), signers.length ? recovered : 'no attested signer to compare against');
+    }
+    return { verified: checks.filter((c) => !c.informational).every((c) => c.pass), ...base, signingAddress: sig.signing_address ?? null, signingAlgo: algo, text, signature: sig.signature ?? null, checks };
   } catch (e) {
     S('sig_fetch', 'Response signature retrieved from enclave', false, e.message);
     return { verified: false, ...base, checks, fetchStatus: e.status ?? 0 };

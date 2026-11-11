@@ -36,6 +36,8 @@ header .tag{opacity:.8;font-size:1rem}
 header .spacer{flex:1}
 .pill{display:inline-block;border:1px solid currentColor;border-radius:999px;padding:2px 12px;font-size:.9rem}
 #twin{display:none;background:var(--amber-bg);color:var(--amber);border-bottom:2px solid var(--amber-line);padding:10px 24px;font-weight:700;text-align:center}
+#toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--navy);color:var(--onnavy);padding:10px 22px;border-radius:999px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .25s;z-index:50}
+#toast.on{opacity:1}
 #warn{display:none;background:var(--amber-bg);color:var(--amber);border-bottom:2px solid var(--amber-line);padding:10px 24px;font-weight:600}
 #warn.on{display:block}
 #twin.on{display:block}
@@ -194,6 +196,7 @@ input[type=text]{width:100%;background:var(--bg);color:var(--ink);border:1px sol
 </aside>
 </main>
 
+<div id="toast" role="status"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha512-q+4liFwdPC/bNdhUpZx6aXDx/h77yEQtn4I1slHydcbZK34nLaR3cAeYSJshoxIOq3mjEf7xJE8YWIUHMn+oCQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 (function(){
@@ -204,6 +207,20 @@ function clear(n){while(n.firstChild)n.removeChild(n.firstChild)}
 var source='paste', busy=false, health=null, gen=0;
 
 /* ---------- helpers ---------- */
+function pickTwin(r){var t=r&&(r.twinSigner||(r.signature&&r.signature.twinSigner)||(r.attestation&&r.attestation.twinSigner));if(t&&typeof t==='object')t=t.address||t.signingAddress||null;return t?String(t):null}
+function toast(msg){var t=$('toast');t.textContent=msg;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(function(){t.classList.remove('on')},2000)}
+function buildMarkdown(r){
+  var a=r.analysis||{},L=[];
+  L.push('# SafeRedline contract review','','**Overall risk: '+(a.overall_risk||'Unknown')+'**','');
+  if(a.executive_summary)L.push(a.executive_summary,'');
+  (a.flagged_clauses||[]).forEach(function(c,i){
+    L.push('## '+(c.clause_title||'Clause')+' ('+(c.risk_level||'High')+' risk)','','**Original:**','> '+String(c.original_text||'').replace(/\n/g,'\n> '),'','**Why it is risky:** '+(c.why_its_risky||''),'','**Suggested redline:**','> '+String(c.suggested_redline||'').replace(/\n/g,'\n> '),'')});
+  var mp=a.missing_protections||[];
+  if(mp.length){L.push('## Missing standard protections','');mp.forEach(function(m){L.push('- '+m)});L.push('')}
+  var att=r.attestation||{},twin=(health&&health.mode==='twin')||att.evidence==='recorded';
+  L.push('---',(twin?'Reviewed against RECORDED evidence (twin, simulated model)':(r.verified?'Reviewed in a verified NEAR AI Cloud TEE':'UNVERIFIED response: not proven to come from the enclave'))+' \u00B7 nonce '+String(att.nonce||'n/a').slice(0,16)+' \u00B7 '+(att.verifiedAt||new Date().toISOString()));
+  return L.join('\n');
+}
 function copyText(t,btn){
   var done=function(){var o=btn.textContent;btn.textContent='Copied';setTimeout(function(){btn.textContent=o},1500)};
   if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(done,fallback)}else fallback();
@@ -329,7 +346,9 @@ function renderTrust(att,sig,verified,opts,channel){
   function add(k,v){kv.appendChild(el('dt',null,k));var d=el('dd');if(v instanceof Node)d.appendChild(v);else d.textContent=v==null?'n/a':v;kv.appendChild(d)}
   add(health&&health.mode==='twin'?'Nonce (recorded \u2014 twin replays a real recorded attestation)':'Fresh nonce',hashEl(att.nonce,10));
   add('Model',el('span','mono',att.model||'n/a'));
-  add('Signing key(s)',(function(){var w=el('span');(att.signingAddresses||[]).forEach(function(a){var d=el('div');d.appendChild(hashEl(a,8));w.appendChild(d)});if(!(att.signingAddresses||[]).length)w.textContent='none';return w})());
+  var twinMode=(health&&health.mode==='twin')||att.evidence==='recorded';
+  add(twinMode?'Attested signer(s) (recorded)':'Signing key(s)',(function(){var w=el('span');(att.signingAddresses||[]).forEach(function(a){var d=el('div');d.appendChild(hashEl(a,8));w.appendChild(d)});if(!(att.signingAddresses||[]).length)w.textContent='none';return w})());
+  if(opts.twinSigner){var ts=el('span');var tsv=hashEl(opts.twinSigner,8);ts.appendChild(tsv);Array.prototype.forEach.call(tsv.querySelectorAll('.hash'),function(h){h.style.color='var(--amber)';h.style.borderColor='var(--amber-line)';h.style.background='var(--amber-bg)'});var tw2=el('div');tw2.appendChild(ts);add('Response signed by (twin test key)',tw2)}
   add('Compose hash',hashEl(att.composeHash,10));
   if(att.measurement){add('MRTD',hashEl(att.measurement.mrtd,10));add('RTMR3',hashEl(att.measurement.rtmr3,10))}
   if(sig||channel){
@@ -404,7 +423,7 @@ function runAnalyze(script){
   api('/api/analyze',{method:'POST',headers:hdr,body:JSON.stringify({text:t,source:source})}).then(function(r){
     clearTimeout(t2);if(my!==gen)return;
     if(r.verified){setSteps(3);setTimeout(function(){if(my===gen)setSteps(4)},400)}else setSteps(0,3);
-    renderTrust(r.attestation,r.signature,r.verified,{retention:r.retention},r.channel);
+    renderTrust(r.attestation,r.signature,r.verified,{retention:r.retention,twinSigner:pickTwin(r)},r.channel);
     renderAnalysis(r);
     $('results').hidden=false;
     var rs=$('analysis');setTimeout(function(){if(my===gen)rs.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})},450);
@@ -424,7 +443,9 @@ Array.prototype.forEach.call(document.querySelectorAll('#attacks button'),functi
 
 function renderAnalysis(r){
   var box=$('analysis');clear(box);var a=r.analysis||{};
-  box.appendChild(el('h2',null,'2. Redline report'));
+  var hd=el('div');hd.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px';hd.appendChild(el('h2',null,'2. Redline report'));hd.firstChild.style.margin='0';
+  if((a.flagged_clauses||[]).length){var ca=el('button','btn sm','Copy all redlines');ca.type='button';ca.addEventListener('click',function(){var md=buildMarkdown(r);var ok=function(){toast('Copied')};if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(md).then(ok,function(){copyText(md,ca);ok()});else{copyText(md,ca);ok()}});hd.appendChild(ca)}
+  box.appendChild(hd);
   if(!r.verified){var w=el('div','alert red','UNVERIFIED RESPONSE: this output could not be proven to come from the attested enclave. Treat it as untrusted.');w.setAttribute('role','alert');box.appendChild(w)}
   if(r.analysisParseError){box.appendChild(el('div','alert amber','The model did not return structured JSON, so no clause cards could be built. Try again.'))}
   if(r.jsonMode==='prompt-only'){var jm=el('div','note','Model used prompt-only JSON mode.');jm.style.marginTop='8px';box.appendChild(jm)}
@@ -462,7 +483,7 @@ $('ask').addEventListener('click',function(){
   clear($('ask-err'));clear($('ask-out'));var my=gen;setBusy(true);$('ask').textContent='Asking...';
   api('/api/ask',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:t,question:q})}).then(function(r){
     if(my!==gen)return;
-    renderTrust(r.attestation,r.signature,r.verified,{retention:r.retention},r.channel);
+    renderTrust(r.attestation,r.signature,r.verified,{retention:r.retention,twinSigner:pickTwin(r)},r.channel);
     var o=$('ask-out');clear(o);
     if(!r.verified)o.appendChild(el('div','alert red','UNVERIFIED RESPONSE: do not rely on this answer.'));
     o.appendChild(el('div',null,r.answer));

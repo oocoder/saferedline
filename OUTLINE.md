@@ -32,7 +32,7 @@ flowchart LR
 
 - Docs: README, architecture, threat model, API, demo script, submission kit written; zero-retention line links synced to final code (re-sync if `src/` changes).
 - Code and tests: backend, twin and offline tests complete (`npm test`, `npm run twin`); see `next.md` for phase status.
-- TLS pinning to the attested gateway key done; 103 tests.
+- TLS pinning to the attested gateway key done; 140+ offline tests.
 - Confirmed live 2026-11-11: 23/23 counted checks, model-prefixed signed text, algo ecdsa, pinned TLS, signer = attested key.
 - Non-ASCII confirmed live: contractor sample `sig_req` passes with `ASCII_SAFE_JSON` on and off.
 - Live attestation check list: see README "Cryptographic verification"; informational checks are shown but don't count.
@@ -41,7 +41,7 @@ flowchart LR
 ## Open items (from next.md "After demo", by Nov 14)
 
 - [ ] User: public GitHub repo, X post (draft in [docs/submission-kit.md](docs/submission-kit.md)), form at nearhackathon.com/#apply.
-- [ ] Hosted demo required for judges (Q-012), up until at least Nov 18; stretch: run SafeRedline itself in a TEE (dstack CVM) to close the "server sees plaintext" gap.
+- [ ] Hosted demo required for judges (Q-012), up until at least Nov 18; hosted-demo mode (`HOSTED_DEMO=1`, Dockerfile, docker-compose.yml) is built but NOT deployed yet; stretch: run SafeRedline itself in a TEE (dstack CVM) to close the "server sees plaintext" gap.
 - [ ] Stretch: ICM `workspace/` for batch contract review.
 
 ## Pointers
