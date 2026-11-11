@@ -26,7 +26,8 @@ describe('HTTP surface', () => {
     assert.equal(json.ok, true);
     assert.equal(json.mode, 'twin');
     assert.equal(json.persistence, 'none');
-    assert.equal(json.apiKeyConfigured, true);
+    assert.equal(json.apiKeyConfigured, false, 'twin never reports its fake key as a real one');
+    assert.equal(json.twinFakeKey, true);
     assert.equal(json.bind, '127.0.0.1');
     assert.equal(typeof json.version, 'string');
     assert.equal(typeof json.model, 'string');
@@ -35,7 +36,7 @@ describe('HTTP surface', () => {
     env = await boot();
     const { json } = await env.get('/api/samples');
     assert.deepEqual(json.map((s) => s.id), ['sample_predatory_nda', 'sample_balanced_nda', 'sample_contractor_agreement']);
-    assert.deepEqual(json.map((s) => s.riskHint), ['High', 'Low', 'Medium']);
+    assert.deepEqual(json.map((s) => s.riskHint), ['High', 'Low', 'High']);
     for (const s of json) { assert.ok(s.title && s.text.length > 200); assert.ok(s.text.length >= 50); }
     assert.match(json[2].text, /[“”—§]/);
   });
@@ -44,6 +45,16 @@ describe('HTTP surface', () => {
     const r = await env.get('/');
     assert.equal(r.status, 200);
     assert.match(r.headers.get('content-type'), /text\/html/);
+  });
+  test('HEAD works for GET routes (no body)', async () => {
+    env = await boot();
+    for (const p of ['/', '/api/health', '/api/samples']) {
+      const res = await fetch(env.base + p, { method: 'HEAD' });
+      assert.equal(res.status, 200, p);
+      assert.equal(await res.text(), '');
+      assert.match(res.headers.get('cache-control'), /no-store/);
+    }
+    assert.equal((await fetch(env.base + '/api/analyze', { method: 'HEAD' })).status, 404);
   });
   test('error envelope: input validation and routing', async () => {
     env = await boot();

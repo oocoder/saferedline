@@ -31,7 +31,7 @@ export const RULES = [
   [/verifyOne/, /verifyOne/],
   [/rd_signer/, /rd_signer/],
   [/attestModel/, /attestModel/],
-  [/sentinel/i, /zero retention|sentinel/i],
+  [/sentinel|asserts?|proves?|test that/i, /assert/], // links claiming a test asserts something must land on an assert line
   [/Host\/Origin|CSRF/i, /guard|Origin/],
 ];
 

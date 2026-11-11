@@ -380,8 +380,8 @@ export async function attestModel(model, apiKey) {
         pass = live === want; detail = pass ? `${want.slice(0, 16)}… (attested = live certificate)` : `live ${String(live).slice(0, 16)}… ≠ attested ${want.slice(0, 16)}…`;
       } catch (e) { detail = `could not read live TLS certificate (${e.message})`; }
     }
-    // Counts toward `verified` by default. TLS_BOUND_STRICT=0 makes it informational (for a CDN/proxy in front of the TEE).
-    checks.push({ ...check('tls_bound', 'gateway', 'TLS certificate matches the attested gateway', pass, detail), ...(process.env.TLS_BOUND_STRICT === '0' ? { informational: true } : {}) });
+    // Always enforced (counts toward `verified`); inference is also pinned to this key in near.mjs.
+    checks.push(check('tls_bound', 'gateway', 'TLS certificate matches the attested gateway', pass, detail));
   }
   const pinned = (process.env.EXPECTED_COMPOSE_HASH || '').toLowerCase();
   // Informational only (excluded from `verified`): is the enclave software pinned to a known-good compose hash?
@@ -437,10 +437,15 @@ export async function verifyResponseSignature({ chatId, model, requestBody, resp
     S('sig_res', 'Signed hash matches the exact response bytes received', resH === myRes, myRes.slice(0, 16) + '…');
     S('sig_model', 'Signed model id matches the model we requested', signedModel === model, signedModel || 'no model prefix in signed text');
     const algo = sig?.signing_algo ?? sig?.signature_kind ?? null; // field name unconfirmed live; accept either
-    S('sig_algo', 'Signature algorithm is ECDSA', algo === null || String(algo).toLowerCase() === 'ecdsa', String(algo ?? 'not reported'));
+    // The ECDSA/EIP-191 recovery below is the real proof; the reported algo is cross-checked only when present.
+    S('sig_algo', `Signature is ECDSA (EIP-191 recovery succeeded; reported algo: ${algo ?? 'not reported'})`, false, '');
+    const algoIdx = checks.length - 1;
     let recovered = '';
     try { recovered = verifyMessage(text, sig.signature); } catch (e) { recovered = `error: ${String(e.message).slice(0, 80)}`; }
-    S('sig_ecdsa', 'ECDSA signature recovers to the signing address', recovered.toLowerCase() === String(sig.signing_address).toLowerCase(), recovered);
+    const recoveredOk = recovered.toLowerCase() === String(sig.signing_address).toLowerCase();
+    S('sig_ecdsa', 'ECDSA signature recovers to the signing address', recoveredOk, recovered);
+    checks[algoIdx].pass = recoveredOk && (algo === null || String(algo).toLowerCase() === 'ecdsa');
+    checks[algoIdx].detail = recoveredOk ? String(algo ?? 'not reported') : 'recovery failed';
     S('sig_attested', 'Signer = key attested inside the TEE above', signers.length > 0 && signers.includes(recovered.toLowerCase()), signers.length ? recovered : 'no attested signer to compare against');
     return { verified: checks.every((c) => c.pass), ...base, signingAddress: sig.signing_address ?? null, signingAlgo: algo, text, checks };
   } catch (e) {

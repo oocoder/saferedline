@@ -14,7 +14,8 @@ export const cfg = {
   timeoutMs: Number(process.env.NEAR_TIMEOUT_MS) || 90000,
   sigRetry: { tries: 5, delays: [300, 600, 1200, 2000] },
   // Serialize the request as pure-ASCII JSON (\uXXXX escapes). Valid JSON either way; guards against the
-  // gateway re-serializing non-ASCII before hashing. Live result recorded in docs: see ASCII_SAFE_JSON.
+  // gateway re-serializing non-ASCII before hashing. Not yet confirmed against the live gateway (needs an API key);
+  // set ASCII_SAFE_JSON=0 to send raw UTF-8 instead. Offline tests cover both forms.
   asciiSafe: process.env.ASCII_SAFE_JSON !== '0',
 };
 export function setNearDeps(o) { Object.assign(cfg, o); }

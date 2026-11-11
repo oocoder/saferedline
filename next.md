@@ -25,4 +25,5 @@ Engineering loop for every defect: reproduce in twin (red) → fix → green →
 ## After demo (by Nov 14)
 - [ ] User: public GitHub repo, X post (draft in docs/submission-kit.md), form at nearhackathon.com/#apply.
 - [ ] Hosted demo required for judges (Q-012), up until ≥ Nov 18 — stretch: run SafeRedline itself in a TEE (dstack CVM) to close the "server sees plaintext" gap.
-- [ ] Stretch: ICM `workspace/` for batch contract review; TLS fingerprint binding (plan #25).
+- [x] TLS channel binding + inference pinning (done 13:17)
+- [ ] Stretch: ICM `workspace/` for batch contract review

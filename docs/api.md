@@ -39,7 +39,9 @@ Analysis = { overall_risk: 'High' | 'Medium' | 'Low' | 'Unknown', executive_summ
 Channel = { tlsPinned: boolean, fingerprint: string | null, note: string }
 ```
 
-`channel` reports whether the contract and signature requests were sent only over TLS whose leaf SPKI sha256 equals `attestation.gatewayTlsFingerprint`. The `tls_bound` check counts toward `verified` by default; `TLS_BOUND_STRICT=0` makes it informational (CDN/proxy in front of the TEE, development only). A pin mismatch is `ATTESTATION_FAILED` and the contract is not sent.
+`channel` reports whether the contract and signature requests were sent only over TLS whose leaf SPKI sha256 equals `attestation.gatewayTlsFingerprint`. The `tls_bound` check counts toward `verified` by default; Binding and pinning are always enforced: any proxy or CDN in front of the NEAR gateway TEE fails closed. A pin mismatch is `ATTESTATION_FAILED` and the contract is not sent.
+
+**Twin mode:** `npm run twin` replays recorded real attestation evidence and simulates the model. `TWIN_SCRIPT=<name>` selects a scripted behavior; the full list is `TWIN_SCRIPTS` in [`tests/twin/install.mjs`](../tests/twin/install.mjs) (for example `ok`, `tampered_res`, `wrong_signer`, `attestation_failed`, `attestation_unavailable`, `nras_down`, `xss`).
 
 **Error envelope (every non-2xx):**
 
@@ -69,7 +71,8 @@ A signature failure is **not** an error. It returns 200 with `verified: false`.
 
 **Endpoints:**
 
-- **`GET /api/health`** → `{ ok: true, model: string, apiKeyConfigured: boolean, mode: 'live' | 'twin', persistence: 'none', bind: string, version: string, warnings: string[] }`. `warnings` is non-empty when an endpoint override is active.
+- **`GET /api/health`** → `{ ok: true, model: string, apiKeyConfigured: boolean, mode: 'live' | 'twin', persistence: 'none', bind: string, version: string, warnings: string[], twinFakeKey?: boolean }`. `twinFakeKey` is set in twin mode, where the API key is a placeholder. `warnings` is non-empty when an endpoint override is active.
+- **`GET /api/models`** → `[{ id, name, context }]`: Confidential TEE models (`owned_by == "nearai"`) from NEAR's `/v1/models`.
 - **`GET /api/samples`** → `[{ id: 'sample_predatory_nda', title: 'Predatory SaaS NDA', riskHint: 'High', text: string }, ...]`. Ordered predatory, balanced, contractor.
 - **`GET /api/attest`** → `200 Attestation`. Returned even when `verified` is false; the UI shows the red checks. Needs no key. `503 ATTESTATION_UNAVAILABLE` only when the report itself can't be fetched.
 - **`POST /api/analyze`**

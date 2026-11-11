@@ -229,7 +229,7 @@ api('/api/health').then(function(h){
   var m=$('hmode');m.textContent=(h.mode==='twin'?'twin':'live')+' | '+h.model;
   if(h.mode==='twin')$('twin').classList.add('on');
   if(h.warnings&&h.warnings.length){var wn=$('warn');h.warnings.forEach(function(w){wn.appendChild(el('div',null,'Warning: '+w))});wn.classList.add('on')}
-  if(!h.apiKeyConfigured&&h.mode!=='twin'){$('inputmsg').textContent='No NEAR API key configured: analysis unavailable, but you can still verify the enclave.'}
+  if(!h.apiKeyConfigured&&h.mode!=='twin'&&!h.twinFakeKey){$('inputmsg').textContent='No NEAR API key configured: analysis unavailable, but you can still verify the enclave.'}
 }).catch(function(){$('hmode').textContent='server unreachable'});
 api('/api/samples').then(function(list){
   var box=$('samples');clear(box);box.appendChild(el('span','note','Try a fictional sample:'));
@@ -361,8 +361,7 @@ function renderTrust(att,sig,verified,opts,channel){
   var rows=list.querySelectorAll('.chk');for(var i=0;i<rows.length;i++)rows[i].style.opacity='';
   if(sig||opts.retention){
     var rt=opts.retention||{},rd=el('div','retention');
-    if(rt.enforcedBy&&rt.persisted!==true)rd.appendChild(el('div',null,'Nothing persisted \u2014 '+rt.enforcedBy));
-    if(rt.persisted===false||(rt.persisted===undefined&&(rt.bytesWrittenToDisk===0||!rt.enforcedBy)))rd.appendChild(el('div',null,'0 bytes written to disk. Memory released on response.'));
+    if(rt.persisted!==true)rd.appendChild(el('div',null,'Nothing persisted: no write paths in the server; enforced by tests/pipeline.test.mjs (sentinel)'));
     if(rd.firstChild)body.appendChild(rd);
   }
 }

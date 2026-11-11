@@ -94,15 +94,15 @@ describe('plain-http twin and strict tls_bound', () => {
     assert.equal(r.channel.tlsPinned, false);
     assert.match(r.channel.note, /skipped/);
   });
-  test('tls_bound counts toward verified by default; TLS_BOUND_STRICT=0 makes it informational', async () => {
+  test('tls_bound always counts toward verified (no opt-out)', async () => {
     const t = await installTwin({ realSigner: true }); restoreTwin = t.restore;
     setDeps({ getTlsFingerprint: async () => 'ee'.repeat(32) });
     const a = await attestModel(fixture.model, '');
     assert.equal(a.checks.find((c) => c.id === 'tls_bound').pass, false);
     assert.equal(a.checks.find((c) => c.id === 'tls_bound').informational, undefined);
     assert.equal(a.verified, false);
-    process.env.TLS_BOUND_STRICT = '0';
-    try { assert.equal((await attestModel(fixture.model, '')).verified, true); } finally { delete process.env.TLS_BOUND_STRICT; }
+    process.env.TLS_BOUND_STRICT = '0'; // removed flag: ignored
+    try { assert.equal((await attestModel(fixture.model, '')).verified, false); } finally { delete process.env.TLS_BOUND_STRICT; }
     assert.match(a.gatewayTlsFingerprint, /^[0-9a-f]{64}$/);
   });
 });

@@ -58,6 +58,20 @@ describe('response signature', () => {
       assert.ok(failedIds(r).includes('sig_attested'));
     }
   });
+  test('algo not reported: passes on EIP-191 recovery alone (documented intent); label says so', async () => {
+    stub({ text: good(), extra: { signing_algo: undefined, signature_kind: undefined } });
+    const r = await verifyResponseSignature(args());
+    const c = r.checks.find((x) => x.id === 'sig_algo');
+    assert.equal(c.pass, true);
+    assert.match(c.label, /EIP-191 recovery succeeded; reported algo: not reported/);
+    assert.equal(r.verified, true);
+  });
+  test('failed recovery fails sig_algo too', async () => {
+    stub({ text: good(), signer: other });
+    setDeps({ fetch: async () => new Response(JSON.stringify({ text: good(), signature: await w.signMessage('something else'), signing_address: w.address, signing_algo: 'ecdsa' })) });
+    const r = await verifyResponseSignature(args());
+    assert.ok(failedIds(r).includes('sig_ecdsa') && failedIds(r).includes('sig_algo'));
+  });
   test('non-ECDSA algorithm is rejected', async () => {
     stub({ text: good(), extra: { signing_algo: 'ed25519' } });
     assert.ok(failedIds(await verifyResponseSignature(args())).includes('sig_algo'));

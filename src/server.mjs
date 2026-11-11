@@ -26,7 +26,7 @@ const VERSION = (() => { try { return JSON.parse(fs.readFileSync(path.join(ROOT,
 const SAMPLE_META = [
   ['sample_predatory_nda', 'Predatory SaaS NDA', 'High'],
   ['sample_balanced_nda', 'Balanced Mutual NDA', 'Low'],
-  ['sample_contractor_agreement', 'Contractor Services Agreement', 'Medium'],
+  ['sample_contractor_agreement', 'Contractor Services Agreement', 'High'],
 ];
 let samplesCache;
 const samples = () => (samplesCache ??= SAMPLE_META.map(([id, title, riskHint]) => ({
@@ -94,7 +94,7 @@ export function createServer({ mode = 'live', host = '127.0.0.1' } = {}) {
   const routes = {
     'GET /': (req, res) => send(res, 200, indexHtml(), 'text/html; charset=utf-8'),
     'GET /api/samples': (req, res) => send(res, 200, samples()),
-    'GET /api/health': (req, res) => send(res, 200, { ok: true, model: cfg.model, apiKeyConfigured: Boolean(cfg.apiKey), mode, persistence: 'none', bind: host, version: VERSION, warnings: endpointOverrides.length ? [`Endpoint override active (${endpointOverrides.join(', ')}): attestation/contract traffic is not going to the default NEAR/Intel/NVIDIA endpoints.`] : [] }),
+    'GET /api/health': (req, res) => send(res, 200, { ok: true, model: cfg.model, apiKeyConfigured: mode === 'twin' ? false : Boolean(cfg.apiKey), ...(mode === 'twin' ? { twinFakeKey: true } : {}), mode, persistence: 'none', bind: host, version: VERSION, warnings: endpointOverrides.length ? [`Endpoint override active (${endpointOverrides.join(', ')}): attestation/contract traffic is not going to the default NEAR/Intel/NVIDIA endpoints.`] : [] }),
     'GET /api/models': async (req, res) => send(res, 200, await listTeeModels()),
     // Attestation alone needs no API key — judges can verify the enclave independently.
     'GET /api/attest': async (req, res) => send(res, 200, await attestModel(cfg.model, cfg.apiKey)),
@@ -129,7 +129,8 @@ export function createServer({ mode = 'live', host = '127.0.0.1' } = {}) {
 
   return http.createServer(async (req, res) => {
     const t0 = Date.now();
-    const key = `${req.method} ${req.url.split('?')[0]}`;
+    const method = req.method === 'HEAD' ? 'GET' : req.method; // HEAD = GET without a body
+    const key = `${method} ${req.url.split('?')[0]}`;
     const handler = routes[key];
     try {
       guard(req);

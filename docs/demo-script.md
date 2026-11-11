@@ -5,7 +5,7 @@ Setup before going on stage: `.env` has a valid key; `npm start` running; page o
 | Time | Do | Say |
 |---|---|---|
 | 0:00 | Show the empty UI. | "This is the document you can't paste into a chatbot: an NDA. SafeRedline reviews it with an AI that runs inside a hardware enclave, and proves it." |
-| 0:15 | Click **Load Predatory NDA**. | "A fictional but realistic one-sided NDA." |
+| 0:15 | Click **Predatory SaaS NDA (High)**. | "A fictional but realistic one-sided NDA." |
 | 0:20 | Click **Analyze privately**. Point at the stages: Attesting enclave, Running in TEE, Verifying signature. | "Before a single byte of this contract leaves my machine, the app verifies the enclave. If that fails, nothing is sent." |
 | 0:40 | Open the IP-assignment clause card (section 3). Read the quote, the risk, then the suggested redline. Click **Copy**. | "It caught that anything I say in meetings becomes theirs, without compensation, and drafted balanced replacement wording I can paste back." |
 | 1:00 | Glance at the other flags: perpetual term, uncapped indemnity, Cayman venue, one-sided definition. | "Five traps in a one-page NDA." |
