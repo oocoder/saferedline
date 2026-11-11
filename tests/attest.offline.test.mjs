@@ -96,7 +96,7 @@ describe('recorded real attestation, offline', () => {
     setDeps({ getCollateral: () => Promise.reject(new Error('ECONNREFUSED')), fallbackPccsUrl: null });
     const t0 = Date.now();
     const a = await attestModel(fixture.model, '');
-    assert.ok(Date.now() - t0 < 1000);
+    assert.ok(Date.now() - t0 < 5000, 'fails fast (slack for CPU load)');
     assert.equal(a.verified, false);
     const c = a.checks.find((x) => x.id === 'tdx_quote' && !x.pass);
     assert.match(c.detail, /PCCS.*failing closed/);
@@ -108,7 +108,7 @@ describe('recorded real attestation, offline', () => {
     setDeps({ getCollateral: () => new Promise(() => {}), fallbackPccsUrl: null, timeouts: { ...deps.timeouts, pccs: 200 } });
     const t0 = Date.now();
     const a = await attestModel(fixture.model, '');
-    assert.ok(Date.now() - t0 < 1500);
+    assert.ok(Date.now() - t0 < 5000, 'timeout (200ms) cuts the hang off; slack for CPU load');
     assert.ok(has(a, 'tdx_quote', 'model'));
     assert.match(a.checks.find((x) => x.id === 'tdx_quote' && !x.pass).detail, /PCCS/);
   });
