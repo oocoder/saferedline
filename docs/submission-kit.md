@@ -1,6 +1,6 @@
 # Submission kit
 
-> **Status: SUBMITTED 2026-11-11 2:33PM ET** via nearhackathon.com/#apply (form, human-confirmed). Demo post: https://x.com/AlexBuildsNY/status/2120597792963883456. Fixes after submission go through https://nearhackathon.com/request-changes (needs the same email, NEAR account and repo link). The repo keeps updating until 2026-11-14 23:59 UTC.
+> **Status: SUBMITTED 2026-11-11 2:33PM ET** via nearhackathon.com/#apply (form, human-confirmed). Verified 2:40PM ET: the official API returned 409 "This repository has already been submitted", so it is saved. Demo post: https://x.com/AlexBuildsNY/status/2120597792963883456. Fixes after submission go through https://nearhackathon.com/request-changes (needs the same email, NEAR account and repo link). The repo keeps updating until 2026-11-14 23:59 UTC.
 
 Source rules: [submission-research.md](submission-research.md). Window ends **2026-11-14 23:59 UTC**. Submission cannot be edited afterward (changes via https://nearhackathon.com/request-changes). Submit at https://nearhackathon.com/#apply.
 
