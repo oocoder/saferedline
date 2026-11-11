@@ -24,6 +24,21 @@ After the response: exact request and response bytes were signed (EIP-191) by a 
 4. **NRAS JWT.** Claims decoded, signature not verified against NVIDIA JWKS; verdict trusted via TLS.
 5. **Model correctness.** Output may be wrong; `quoteFound` is only a verbatim-quote guard.
 
+## Deferred limits (from independent review)
+
+- **(a) No TLS channel binding.** A relay in front of NEAR could see plaintext while attestation and signature still verify, because nothing ties the TLS endpoint to the attested enclave. Fix: `include_tls_fingerprint` compared to the live certificate, or end-to-end encryption to the attested key.
+- **(b) Measurement pinning is optional** (`EXPECTED_COMPOSE_HASH`). We verify the enclave is genuine and which code hash it runs, not that the hash is a NEAR-published release. Fix: pin to known-good published releases.
+- **(c) TCB policy matches NEAR's reference verifier** and accepts `OutOfDate`; the status is shown in the UI.
+- **(d) Responses carry no per-request nonce**, so replay only matters to a party already holding the plaintext.
+
+## Security review
+
+An independent adversarial review found no way to produce `verified: true` from attacker-supplied bytes alone; checks fail closed.
+
+Tested: fail-open paths (missing quote body, compose, gateway, signer, malformed NRAS); that test seams (`deps`, twin) are unreachable from HTTP requests; the sentinel test showing contract text never reaches logs, error bodies or fs writes.
+
+Being hardened now: strict signature model and algorithm checks, exact signer-address length, NVIDIA GPU count, nonce and expiry checks, a lock on endpoint overrides, and local CSRF and Host-header checks.
+
 ## Fail-closed design
 
 Missing `reportData`, `app_compose`, gateway attestation, attested signer, or malformed NRAS shape each produce a failed check, never a skipped one. PCCS/NRAS outages and timeouts fail closed with an error naming the source. Attestation failure means no contract is sent (asserted in tests: twin chat endpoint receives zero requests).
