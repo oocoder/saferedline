@@ -46,8 +46,8 @@ const SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; worker-src blob: https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'",
 };
 
-function send(res, status, body, type = 'application/json') {
-  res.writeHead(status, { 'Content-Type': type, ...SECURITY_HEADERS });
+function send(res, status, body, type = 'application/json', extra = {}) {
+  res.writeHead(status, { 'Content-Type': type, ...SECURITY_HEADERS, ...extra });
   res.end(type === 'application/json' ? JSON.stringify(body) : body);
 }
 
@@ -90,17 +90,55 @@ function contractText(v) {
   return t;
 }
 
-export function createServer({ mode = 'live', host = '127.0.0.1' } = {}) {
+// ---- HOSTED_DEMO mode: public showcase that only ever processes the bundled fictional samples ----
+const MIN = 60 * 1000;
+export const defaultLimits = () => ({
+  window: Number(process.env.DEMO_WINDOW_MS) || 10 * MIN,
+  analyze: Number(process.env.DEMO_ANALYZE_LIMIT) || 5,   // per IP per window
+  ask: Number(process.env.DEMO_ASK_LIMIT) || 20,          // per IP per window
+  daily: Number(process.env.DEMO_DAILY_CAP) || 200,       // global, analyses + follow-ups, per UTC day
+  now: () => Date.now(),
+});
+const rateError = (message, retryAfter) => Object.assign(new AppError(message, { status: 429, code: 'RATE_LIMITED', stage: 'input' }), { retryAfter });
+
+/** In-memory only (a Map with expiry): no persistence, resets on restart. */
+export function makeLimiter(l) {
+  const hits = new Map(); let day = '', daily = 0;
+  return {
+    check(ip, kind) {
+      const t = l.now(); const d = new Date(t).toISOString().slice(0, 10);
+      if (d !== day) { day = d; daily = 0; }
+      if (daily >= l.daily) throw rateError('Hosted demo daily capacity reached — try again tomorrow.', Math.ceil((Date.parse(d) + 86400000 - t) / 1000));
+      const key = `${ip}|${kind}`;
+      const arr = (hits.get(key) || []).filter((x) => t - x < l.window);
+      if (arr.length >= l[kind]) throw rateError(`Rate limit: at most ${l[kind]} ${kind === 'ask' ? 'follow-ups' : 'analyses'} per ${Math.round(l.window / MIN)} minutes per visitor.`, Math.ceil((arr[0] + l.window - t) / 1000));
+      arr.push(t); hits.set(key, arr); daily++;
+      if (hits.size > 10000) for (const [k, v] of hits) if (!v.some((x) => t - x < l.window)) hits.delete(k);
+    },
+  };
+}
+
+export function createServer({ mode = 'live', host = '127.0.0.1', hostedDemo = false, limits = {}, trustProxy = false } = {}) {
+  const limiter = hostedDemo ? makeLimiter({ ...defaultLimits(), ...limits }) : null;
+  // Behind a trusted platform proxy the client is the right-most X-Forwarded-For entry (the one the proxy appended).
+  const clientIp = (req) => (trustProxy && req.headers['x-forwarded-for'] ? String(req.headers['x-forwarded-for']).split(',').at(-1).trim() : req.socket.remoteAddress) || 'unknown';
+  const sampleTexts = () => new Set(samples().map((x) => x.text.trim()));
+  const hostedGate = (req, text, kind) => {
+    if (!hostedDemo) return;
+    if (!sampleTexts().has(text)) throw new AppError('Hosted demo accepts the bundled fictional samples only — run locally for real contracts', { status: 403, code: 'SAMPLES_ONLY', stage: 'input' });
+    limiter.check(clientIp(req), kind);
+  };
   const routes = {
     'GET /': (req, res) => send(res, 200, indexHtml(), 'text/html; charset=utf-8'),
     'GET /api/samples': (req, res) => send(res, 200, samples()),
-    'GET /api/health': (req, res) => send(res, 200, { ok: true, model: cfg.model, apiKeyConfigured: mode === 'twin' ? false : Boolean(cfg.apiKey), ...(mode === 'twin' ? { twinFakeKey: true } : {}), mode, persistence: 'none', bind: host, version: VERSION, warnings: endpointOverrides.length ? [`Endpoint override active (${endpointOverrides.join(', ')}): attestation/contract traffic is not going to the default NEAR/Intel/NVIDIA endpoints.`] : [] }),
+    'GET /api/health': (req, res) => send(res, 200, { ok: true, model: cfg.model, apiKeyConfigured: mode === 'twin' ? false : Boolean(cfg.apiKey), ...(mode === 'twin' ? { twinFakeKey: true } : {}), mode: hostedDemo ? 'hosted-demo' : mode, persistence: 'none', bind: host, version: VERSION, warnings: endpointOverrides.length ? [`Endpoint override active (${endpointOverrides.join(', ')}): attestation/contract traffic is not going to the default NEAR/Intel/NVIDIA endpoints.`] : [] }),
     'GET /api/models': async (req, res) => send(res, 200, await listTeeModels()),
     // Attestation alone needs no API key — judges can verify the enclave independently.
     'GET /api/attest': async (req, res) => send(res, 200, await attestModel(cfg.model, cfg.apiKey)),
     'POST /api/analyze': async (req, res) => {
       const body = await readJson(req);
       let text = contractText(body.text);
+      hostedGate(req, text, 'analyze');
       const result = await analyzeContract(text);
       text = null; // drop our only reference to the contract
       send(res, 200, result);
@@ -110,6 +148,7 @@ export function createServer({ mode = 'live', host = '127.0.0.1' } = {}) {
       let text = contractText(body.text);
       if (typeof body.question !== 'string' || !body.question.trim() || body.question.length > 1000) throw bad('Ask a question of 1 to 1000 characters.');
       let question = body.question.trim();
+      hostedGate(req, text, 'ask');
       const result = await askFollowUp(text, question);
       text = question = null;
       send(res, 200, result);
@@ -123,7 +162,7 @@ export function createServer({ mode = 'live', host = '127.0.0.1' } = {}) {
   function guard(req) {
     const deny = (m, status = 403, code = 'BAD_ORIGIN') => new AppError(m, { status, code, stage: 'input' });
     if (!hostOk(req.headers.host)) throw deny('Host header not allowed (SafeRedline only answers on localhost).');
-    if (req.headers.origin !== undefined && req.headers.origin !== `http://${req.headers.host}`) throw deny('Cross-origin request refused.');
+    if (req.headers.origin !== undefined && ![`http://${req.headers.host}`, `https://${req.headers.host}`].includes(req.headers.origin)) throw deny('Cross-origin request refused.');
     if (req.method === 'POST' && !/^application\/json\b/i.test(req.headers['content-type'] || '')) throw deny('Content-Type must be application/json.', 415, 'UNSUPPORTED_MEDIA_TYPE');
   }
 
@@ -138,7 +177,7 @@ export function createServer({ mode = 'live', host = '127.0.0.1' } = {}) {
       await handler(req, res);
     } catch (e) {
       const [status, body] = envelope(e);
-      if (!res.headersSent) send(res, status, body); else res.end();
+      if (!res.headersSent) send(res, status, body, 'application/json', e.retryAfter ? { 'Retry-After': String(e.retryAfter) } : {}); else res.end();
     } finally {
       // Metadata only — never contract text, prompts, or model output.
       console.log(`${req.method} ${req.url.split('?')[0]} ${res.statusCode} ${Date.now() - t0}ms`);
@@ -146,16 +185,22 @@ export function createServer({ mode = 'live', host = '127.0.0.1' } = {}) {
   });
 }
 
+function fail(m) { console.error(`\n  ${m}\n`); process.exit(1); }
+
 async function main() {
   const PORT = process.env.PORT === undefined ? 3000 : Number(process.env.PORT);
+  const hostedDemo = process.env.HOSTED_DEMO === '1';
   const HOST = process.env.HOST || '127.0.0.1';
+  const loopback = ['127.0.0.1', 'localhost', '::1'].includes(HOST);
+  if (!loopback && !hostedDemo) fail(`Refusing to bind ${HOST}: SafeRedline is loopback-only unless HOSTED_DEMO=1 (public demo of bundled samples).`);
+  if (hostedDemo && !loopback && !process.env.ALLOWED_HOSTS) fail('HOSTED_DEMO on a public bind needs ALLOWED_HOSTS=<your public hostname> (Host-header allowlist).');
   let mode = 'live';
   if (process.env.SAFEREDLINE_TWIN) {
     const { installTwin, resolveScript } = await import('../tests/twin/install.mjs');
     await installTwin({ script: resolveScript(process.env.TWIN_SCRIPT) });
     mode = 'twin';
   }
-  const server = createServer({ mode, host: HOST });
+  const server = createServer({ mode, host: HOST, hostedDemo, trustProxy: process.env.TRUST_PROXY === '1' });
   server.listen(PORT, HOST, () => {
     const { port } = server.address();
     console.log(`\n  SafeRedline running → http://${HOST}:${port}`);
@@ -165,6 +210,7 @@ async function main() {
       console.log(`  Model: ${cfg.model} (NEAR AI Cloud, Confidential TEE)`);
       console.log(`  API key: ${cfg.apiKey ? (cfg.apiKey.startsWith('sk-') ? 'configured' : 'configured (WARNING: NEAR AI Cloud keys start with "sk-")') : 'MISSING — set NEAR_API_KEY in .env'}`);
     }
+    if (hostedDemo) console.log('  HOSTED DEMO: bundled fictional samples only; per-IP + daily rate limits (in memory)');
     console.log('  Persistence: none (no disk, no DB, no content logging)\n');
   });
 }

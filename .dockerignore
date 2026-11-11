@@ -1,0 +1,16 @@
+# Never ship secrets or dev material
+.env
+.env.*
+!.env.example
+.work
+.git
+node_modules
+tests
+scripts
+docs
+*.md
+*.pdf
+next.md
+Dockerfile
+docker-compose.yml
+.dockerignore

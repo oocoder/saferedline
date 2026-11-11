@@ -1,6 +1,6 @@
 ---
 doc: SafeRedline OUTLINE
-repo: safe-redline (local: /Users/alexmaldonado/projects/saferedline)
+repo: https://github.com/oocoder/saferedline
 purpose: Index of the project. Points to where things live; holds no specs.
 updated: 2026-11-11
 how_to_read: Read the summary and status, then follow pointers. Details live in the linked files.

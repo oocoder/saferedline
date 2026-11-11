@@ -5,9 +5,9 @@ export const SENTINEL = 'ZXQ-SECRET-7731';
 export const CONTRACT = `CONFIDENTIAL AGREEMENT ${SENTINEL}. The Recipient shall keep all information secret in perpetuity “forever” — § 9 café.`;
 
 /** Boot twin + app server on ephemeral ports. */
-export async function boot(opts = {}) {
+export async function boot({ serverOpts = {}, ...opts } = {}) {
   const t = await installTwin(opts);
-  const server = createServer({ mode: 'twin' });
+  const server = createServer({ mode: 'twin', ...serverOpts });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
   const post = async (p, body) => {
@@ -33,3 +33,14 @@ export function assertEnvelope(assert, r, code, status, contractSent) {
   assert.ok(['input', 'config', 'attestation', 'inference', 'signature', 'server'].includes(r.json.error.stage));
   assert.equal(r.json.error.contractSent, contractSent);
 }
+
+import http from 'node:http';
+/** Raw request (lets tests set Host / Origin / X-Forwarded-For, which fetch forbids). */
+export const rawReq = (base, { method = 'GET', p = '/api/health', headers = {}, body } = {}) => new Promise((resolve, reject) => {
+  const u = new URL(base);
+  const r = http.request({ host: u.hostname, port: u.port, path: p, method, headers }, (res) => {
+    let b = ''; res.on('data', (d) => (b += d));
+    res.on('end', () => { let json; try { json = JSON.parse(b); } catch { /* not json */ } resolve({ status: res.statusCode, headers: res.headers, json, raw: b }); });
+  });
+  r.on('error', reject); if (body) r.write(body); r.end();
+});
