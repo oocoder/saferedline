@@ -31,7 +31,7 @@ export function createTwin() {
   const twin = {
     script: {}, // { attestation, nras, chat, signature }
     chatRequests: 0, requests: [], store: new Map(), sigHits: new Map(), chatCalls: 0, counter: 0,
-    url: '', nrasUrl: '',
+    url: '', nrasUrl: '', jwksUrl: '',
   };
   const server = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
@@ -56,12 +56,18 @@ export function createTwin() {
           if (s.mutate) s.mutate(rep); // test hook: arbitrary tampering of the recorded report
           return json(200, rep);
         }
+        if (req.method === 'GET' && u.pathname === '/jwks') return json(200, s.jwks === 'empty' ? { keys: [] } : fixture.jwks);
         if (req.method === 'POST' && u.pathname === '/nras') {
           const m = s.nras || 'fixture';
           if (m === '503') return json(503, { error: { message: 'twin: nras down' } });
           if (m === 'hang') return;
           if (m === 'bad_shape') return json(200, { unexpected: true });
-          const hit = fixture.nras[sha256hex(body)];
+          let hit = fixture.nras[sha256hex(body)];
+          if (hit && m === 'bad_jwt_sig') { // flip a signature byte of the overall token
+            const t = hit[0][1].split('.'); const sg = Buffer.from(t[2], 'base64url'); sg[5] ^= 1; t[2] = sg.toString('base64url');
+            hit = structuredClone(hit); hit[0][1] = t.join('.');
+          }
+          if (hit && m === 'no_gpus') hit = [hit[0], {}];
           return hit ? json(200, hit) : json(404, { error: { message: 'twin: unknown nras payload' } });
         }
         if (req.method === 'POST' && u.pathname === '/v1/chat/completions') {
@@ -118,7 +124,7 @@ export function createTwin() {
   });
   twin.listen = () => new Promise((resolve) => server.listen(0, '127.0.0.1', () => {
     const port = server.address().port;
-    twin.url = `http://127.0.0.1:${port}/v1`; twin.nrasUrl = `http://127.0.0.1:${port}/nras`;
+    twin.url = `http://127.0.0.1:${port}/v1`; twin.nrasUrl = `http://127.0.0.1:${port}/nras`; twin.jwksUrl = `http://127.0.0.1:${port}/jwks`;
     resolve(twin);
   }));
   twin.close = () => new Promise((r) => { server.closeAllConnections?.(); server.close(() => r()); });

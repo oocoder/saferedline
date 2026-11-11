@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { analyzeContract, askFollowUp, listTeeModels, cfg } from './near.mjs';
-import { attestModel } from './attest.mjs';
+import { attestModel, endpointOverrides } from './attest.mjs';
 import { AppError } from './errors.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -94,7 +94,7 @@ export function createServer({ mode = 'live', host = '127.0.0.1' } = {}) {
   const routes = {
     'GET /': (req, res) => send(res, 200, indexHtml(), 'text/html; charset=utf-8'),
     'GET /api/samples': (req, res) => send(res, 200, samples()),
-    'GET /api/health': (req, res) => send(res, 200, { ok: true, model: cfg.model, apiKeyConfigured: Boolean(cfg.apiKey), mode, persistence: 'none', bind: host, version: VERSION }),
+    'GET /api/health': (req, res) => send(res, 200, { ok: true, model: cfg.model, apiKeyConfigured: Boolean(cfg.apiKey), mode, persistence: 'none', bind: host, version: VERSION, warnings: endpointOverrides.length ? [`Endpoint override active (${endpointOverrides.join(', ')}): attestation/contract traffic is not going to the default NEAR/Intel/NVIDIA endpoints.`] : [] }),
     'GET /api/models': async (req, res) => send(res, 200, await listTeeModels()),
     // Attestation alone needs no API key — judges can verify the enclave independently.
     'GET /api/attest': async (req, res) => send(res, 200, await attestModel(cfg.model, cfg.apiKey)),
@@ -116,11 +116,23 @@ export function createServer({ mode = 'live', host = '127.0.0.1' } = {}) {
     },
   };
 
+  const extraHosts = String(process.env.ALLOWED_HOSTS || '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean);
+  const hostOk = (h) => { const n = String(h || '').toLowerCase().replace(/:\d+$/, ''); return ['localhost', '127.0.0.1', '[::1]'].includes(n) || extraHosts.includes(n); };
+
+  // Local-CSRF / DNS-rebinding defense: only same-origin requests to a loopback Host may reach the API.
+  function guard(req) {
+    const deny = (m, status = 403, code = 'BAD_ORIGIN') => new AppError(m, { status, code, stage: 'input' });
+    if (!hostOk(req.headers.host)) throw deny('Host header not allowed (SafeRedline only answers on localhost).');
+    if (req.headers.origin !== undefined && req.headers.origin !== `http://${req.headers.host}`) throw deny('Cross-origin request refused.');
+    if (req.method === 'POST' && !/^application\/json\b/i.test(req.headers['content-type'] || '')) throw deny('Content-Type must be application/json.', 415, 'UNSUPPORTED_MEDIA_TYPE');
+  }
+
   return http.createServer(async (req, res) => {
     const t0 = Date.now();
     const key = `${req.method} ${req.url.split('?')[0]}`;
     const handler = routes[key];
     try {
+      guard(req);
       if (!handler) throw new AppError('Not found', { status: 404, code: 'NOT_FOUND', stage: 'input' });
       await handler(req, res);
     } catch (e) {

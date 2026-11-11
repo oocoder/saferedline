@@ -2,23 +2,9 @@
 // ZERO RETENTION: contract text, prompts and model output live only in local
 // variables for the lifetime of one call. Nothing is logged, cached or written.
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import './env.mjs'; // must stay first: loads .env before config below reads process.env
 import { deps, attestModel, verifyResponseSignature } from './attest.mjs';
 import { AppError } from './errors.mjs';
-
-// --- config (.env is read once at startup from the repo root; only the API key is kept) ----
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-function loadEnv() {
-  const file = path.join(ROOT, '.env');
-  if (!fs.existsSync(file)) return;
-  for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, '');
-  }
-}
-loadEnv();
 
 // Injectable config (tests / twin). Confidential TEE models are owned_by === "nearai" in GET /v1/models.
 export const cfg = {

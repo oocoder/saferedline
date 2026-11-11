@@ -73,7 +73,7 @@ describe('process', () => {
       const j = await res.json();
       assert.equal(j.mode, 'twin');
       assert.equal(j.bind, '127.0.0.1');
-      const an = await fetch(`http://127.0.0.1:${url.port}/api/analyze`, { method: 'POST', body: JSON.stringify({ text: CONTRACT }) });
+      const an = await fetch(`http://127.0.0.1:${url.port}/api/analyze`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: CONTRACT }) });
       assert.equal((await an.json()).verified, true);
     } finally { child.kill(); }
   });

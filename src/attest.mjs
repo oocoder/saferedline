@@ -17,21 +17,42 @@
 // FAIL CLOSED: every check below is always emitted; a missing input is a failed
 // check, never a skipped one. Nothing here writes to disk or logs content.
 
+import './env.mjs'; // must stay first: loads .env before deps below reads process.env
 import crypto from 'node:crypto';
+import tls from 'node:tls';
 import dcap from '@phala/dcap-qvl';
 import { verifyMessage } from 'ethers';
 import { AppError } from './errors.mjs';
 
 const { getCollateral, verify: dcapVerify, PHALA_PCCS_URL, INTEL_PCS_URL } = dcap;
 
+// Endpoint overrides redirect where attestation evidence / plaintext goes: refuse unless explicitly allowed.
+const OVERRIDE_VARS = ['NEAR_BASE_URL', 'NRAS_URL', 'NRAS_JWKS_URL', 'PCCS_URL'];
+export const endpointOverrides = process.env.SAFEREDLINE_TWIN ? [] : OVERRIDE_VARS.filter((k) => process.env[k]);
+if (endpointOverrides.length && process.env.ALLOW_ENDPOINT_OVERRIDE !== '1') {
+  throw new Error(`Refusing endpoint override(s) ${endpointOverrides.join(', ')}: they redirect attestation and contract traffic. Set ALLOW_ENDPOINT_OVERRIDE=1 to allow (development only).`);
+}
+
 // Injectable seams (tests / twin). Everything networked or time-dependent goes through here.
 export const deps = {
   fetch: (...a) => globalThis.fetch(...a),
   baseUrl: process.env.NEAR_BASE_URL || 'https://cloud-api.near.ai/v1',
   nrasUrl: process.env.NRAS_URL || 'https://nras.attestation.nvidia.com/v3/attest/gpu',
+  jwksUrl: process.env.NRAS_JWKS_URL || 'https://nras.attestation.nvidia.com/.well-known/jwks.json',
   pccsUrl: process.env.PCCS_URL || PHALA_PCCS_URL,
   fallbackPccsUrl: INTEL_PCS_URL,
   getCollateral,
+  // SPKI sha256 (hex) of the TLS certificate the gateway host presents to us right now.
+  getTlsFingerprint: (host, port = 443) => new Promise((resolve, reject) => {
+    const sock = tls.connect({ host, port, servername: host, timeout: 10000 }, () => {
+      try {
+        const spki = new crypto.X509Certificate(sock.getPeerCertificate().raw).publicKey.export({ type: 'spki', format: 'der' });
+        resolve(sha256hex(spki));
+      } catch (e) { reject(e); } finally { sock.end(); }
+    });
+    sock.on('timeout', () => { sock.destroy(); reject(new Error('timeout')); });
+    sock.on('error', reject);
+  }),
   nowSec: () => Math.floor(Date.now() / 1000),
   newNonce: () => crypto.randomBytes(32).toString('hex'),
   timeouts: { attest: 30000, pccs: 15000, nras: 30000, signature: 15000 },
@@ -80,7 +101,7 @@ export async function fetchJson(url, opts = {}, timeoutMs = 30000) {
 }
 
 export async function fetchAttestation(model, nonce, apiKey) {
-  const qs = new URLSearchParams({ model, provider: 'near', include_tls_fingerprint: 'false', signing_algo: 'ecdsa', nonce });
+  const qs = new URLSearchParams({ model, provider: 'near', include_tls_fingerprint: 'true', signing_algo: 'ecdsa', nonce });
   const headers = { Accept: 'application/json', 'x-no-aliasing': 'true' };
   if (apiKey && apiKey.startsWith('sk-')) headers.Authorization = `Bearer ${apiKey}`; // only needed for org-enabled models
   return fetchJson(`${deps.baseUrl}/attestation/report?${qs}`, { headers }, deps.timeouts.attest);
@@ -111,26 +132,61 @@ function replayRtmr3(events) {
 }
 
 const NRAS_UNEXPECTED = 'NVIDIA NRAS returned unexpected response — failing closed';
+const b64j = (x) => JSON.parse(Buffer.from(x, 'base64url').toString('utf8'));
+
+// Verify an NRAS ES384 JWT against NVIDIA's JWKS; returns claims. Throws on any problem.
+function verifyJwt(jwt, jwks, nonce) {
+  const [h, p, sig] = String(jwt).split('.');
+  if (!h || !p || !sig) throw new Error(NRAS_UNEXPECTED);
+  const head = b64j(h);
+  if (head.alg !== 'ES384') throw new Error('NVIDIA NRAS token uses unexpected algorithm — failing closed');
+  const jwk = (jwks.keys || []).find((k) => k.kid === head.kid);
+  if (!jwk) throw new Error('NVIDIA NRAS token signed by unknown key — failing closed');
+  const key = crypto.createPublicKey({ key: { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y }, format: 'jwk' });
+  if (!crypto.verify('sha384', Buffer.from(`${h}.${p}`), { key, dsaEncoding: 'ieee-p1363' }, Buffer.from(sig, 'base64url'))) {
+    throw new Error('NVIDIA NRAS token signature invalid — failing closed');
+  }
+  const c = b64j(p); const now = deps.nowSec();
+  if (typeof c.exp !== 'number' || c.exp < now) throw new Error('NVIDIA NRAS token expired — failing closed');
+  if (typeof c.nbf === 'number' && c.nbf > now + 300) throw new Error('NVIDIA NRAS token not yet valid — failing closed');
+  if (String(c.eat_nonce || '').toLowerCase() !== nonce.toLowerCase()) throw new Error('NVIDIA NRAS token not bound to OUR nonce — failing closed');
+  return c;
+}
+
+/** Per-GPU token claims that must hold (names confirmed against the recorded NRAS response). */
+export function gpuClaimProblems(c) {
+  const bad = [];
+  if (c.secboot !== true) bad.push('secboot');
+  if (c.dbgstat !== 'disabled') bad.push('dbgstat');
+  if (c.measres !== 'success') bad.push('measres');
+  if (c['x-nvidia-attestation-warning'] !== null && c['x-nvidia-attestation-warning'] !== undefined) bad.push('attestation-warning');
+  for (const [k, v] of Object.entries(c)) if (/^x-nvidia-.*-(verified|validated)$/.test(k) && v !== true) bad.push(k);
+  if (c['x-nvidia-gpu-attestation-report-nonce-match'] !== true) bad.push('report-nonce-match');
+  return bad;
+}
+
+const nrasFetch = async (url, opts, what) => {
+  try { return await fetchJson(url, opts, deps.timeouts.nras); } catch (e) {
+    if (what === 'attest' && e instanceof HttpError && e.status > 0 && e.status < 500) throw new Error(`NVIDIA NRAS rejected the evidence (${e.message}) — failing closed`);
+    const err = new Error('NVIDIA NRAS unreachable — failing closed'); err.unavailable = 'NVIDIA NRAS'; throw err;
+  }
+};
 
 async function verifyNvidia(nvidiaPayload, nonce) {
   const payload = typeof nvidiaPayload === 'string' ? JSON.parse(nvidiaPayload) : nvidiaPayload;
   const nonceOk = String(payload.nonce || '').toLowerCase() === nonce.toLowerCase();
-  let body;
-  try {
-    body = await fetchJson(deps.nrasUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }, deps.timeouts.nras);
-  } catch (e) {
-    if (e instanceof HttpError && e.status > 0 && e.status < 500) throw new Error(`NVIDIA NRAS rejected the evidence (${e.message}) — failing closed`);
-    const err = new Error('NVIDIA NRAS unreachable — failing closed'); err.unavailable = 'NVIDIA NRAS'; throw err;
+  const body = await nrasFetch(deps.nrasUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }, 'attest');
+  const jwks = await nrasFetch(deps.jwksUrl, {}, 'jwks');
+  let overall, perGpu;
+  try { overall = body[0][1]; perGpu = Object.values(body[1] || {}); } catch { throw new Error(NRAS_UNEXPECTED); }
+  if (typeof overall !== 'string' || !perGpu.length || !perGpu.every((t) => typeof t === 'string')) throw new Error(NRAS_UNEXPECTED);
+  // The overall verdict and every per-GPU token must carry NVIDIA's signature, our nonce, and be unexpired.
+  const claims = verifyJwt(overall, jwks, nonce);
+  for (const t of perGpu) {
+    const bad = gpuClaimProblems(verifyJwt(t, jwks, nonce));
+    if (bad.length) throw new Error(`NVIDIA GPU token claims failed (${bad.join(', ')}) — failing closed`);
   }
-  // NOTE: the NRAS JWT signature is not verified here (verdict trusted via TLS to NVIDIA). See README.
-  let claims, gpus;
-  try {
-    const jwt = body[0][1];
-    claims = JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString('utf8'));
-    gpus = Object.keys(body[1] || {}).length;
-  } catch { throw new Error(NRAS_UNEXPECTED); }
-  if (!claims || typeof claims !== 'object') throw new Error(NRAS_UNEXPECTED);
-  return { nonceOk, verdict: claims['x-nvidia-overall-att-result'] === true, gpus, arch: payload.arch };
+  return { nonceOk, verdict: claims['x-nvidia-overall-att-result'] === true, gpus: perGpu.length, arch: payload.arch };
 }
 
 async function collateralFor(quote) {
@@ -181,8 +237,15 @@ export async function verifyOne(att, nonce, { gpu = false, scope = 'model' } = {
     C('tdx_debug', 'TDX debug mode disabled', !debug, `td_attributes[0]=0x${td.tdAttributes[0].toString(16).padStart(2, '0')}`);
 
     const rd = Buffer.from(td.reportData);
-    const addr = Buffer.alloc(32); Buffer.from(strip0x(att.signing_address), 'hex').copy(addr);
-    C('rd_signer', 'Quote binds enclave signing key', !!att.signing_address && rd.subarray(0, 32).equals(addr), att.signing_address);
+    const okAddr = /^0x[0-9a-fA-F]{40}$/.test(String(att.signing_address || '')); // ecdsa: exactly 20 bytes
+    // Gateway reports with a TLS fingerprint bind sha256(address || spki_sha256) instead of the zero-padded address.
+    const fp = att.tls_cert_fingerprint;
+    const fpOk = fp === undefined || /^[0-9a-f]{64}$/i.test(String(fp));
+    const addrBytes = okAddr ? Buffer.from(strip0x(att.signing_address), 'hex') : null;
+    const expected = !okAddr || !fpOk ? null
+      : fp === undefined ? Buffer.concat([addrBytes, Buffer.alloc(12)])
+        : crypto.createHash('sha256').update(Buffer.concat([addrBytes, Buffer.from(fp, 'hex')])).digest();
+    C('rd_signer', 'Quote binds enclave signing key', !!expected && rd.subarray(0, 32).equals(expected), okAddr && fpOk ? att.signing_address + (fp ? ' + TLS key' : '') : 'signing_address / tls fingerprint malformed');
     C('rd_nonce', 'Quote binds OUR fresh nonce (anti-replay)', rd.subarray(32, 64).toString('hex') === nonce, rd.subarray(32, 64).toString('hex'));
   }
 
@@ -199,7 +262,7 @@ export async function verifyOne(att, nonce, { gpu = false, scope = 'model' } = {
   } else {
     C('compose', 'App code (docker compose) hash bound in MRCONFIGID', false, composeHash ? 'no verified quote body' : 'app_compose missing from evidence');
   }
-  if (process.env.EXPECTED_COMPOSE_HASH) {
+  if (process.env.EXPECTED_COMPOSE_HASH && scope === 'model') { // the pin names the MODEL enclave's compose
     C('compose_pinned', 'Compose hash equals pinned EXPECTED_COMPOSE_HASH', composeHash === process.env.EXPECTED_COMPOSE_HASH.toLowerCase(), composeHash || 'missing');
   }
 
@@ -223,7 +286,7 @@ export async function verifyOne(att, nonce, { gpu = false, scope = 'model' } = {
         const g = await verifyNvidia(att.nvidia_payload, nonce);
         gpuCount = g.gpus || null;
         checks.push(check('gpu_nonce', 'gpu', 'GPU evidence bound to OUR nonce', g.nonceOk, nonce.slice(0, 16) + '…'));
-        checks.push(check('gpu', 'gpu', 'NVIDIA NRAS verdict: GPU TEE genuine', g.verdict, `${g.gpus || '?'} GPU(s) · ${g.arch || ''}`));
+        checks.push(check('gpu', 'gpu', 'NVIDIA NRAS verdict: GPU TEE genuine (signed by NVIDIA)', g.verdict && g.gpus >= 1, `${g.gpus} GPU(s) · ${g.arch || ''}`));
       } catch (e) {
         if (e.unavailable) unavailable.push(e.unavailable);
         checks.push(check('gpu', 'gpu', 'NVIDIA NRAS verdict: GPU TEE genuine', false, e.message));
@@ -263,13 +326,32 @@ export async function attestModel(model, apiKey) {
   const gwRes = results[models.length];
   for (const r of results) if (r) checks.push(...r.checks);
 
+  if (report.gateway_attestation) {
+    // The attested gateway key is bound to the TLS public key; compare with the certificate we actually reach.
+    const want = String(report.gateway_attestation.tls_cert_fingerprint || '').toLowerCase();
+    let pass = false, detail;
+    if (!want) detail = 'gateway report has no tls_cert_fingerprint';
+    else {
+      try {
+        const u = new URL(deps.baseUrl);
+        const live = await withTimeout(deps.getTlsFingerprint(u.hostname, Number(u.port) || 443), 10000, 'timeout');
+        pass = live === want; detail = pass ? `${want.slice(0, 16)}… (attested = live certificate)` : `live ${String(live).slice(0, 16)}… ≠ attested ${want.slice(0, 16)}…`;
+      } catch (e) { detail = `could not read live TLS certificate (${e.message})`; }
+    }
+    // Informational unless TLS_BOUND_STRICT=1: a CDN/proxy in front of the TEE would legitimately mismatch.
+    checks.push({ ...check('tls_bound', 'gateway', 'TLS certificate matches the attested gateway', pass, detail), ...(process.env.TLS_BOUND_STRICT === '1' ? {} : { informational: true }) });
+  }
+  const pinned = (process.env.EXPECTED_COMPOSE_HASH || '').toLowerCase();
+  // Informational only (excluded from `verified`): is the enclave software pinned to a known-good compose hash?
+  checks.push({ ...check('measurement_pinning', 'info', 'Measurement pinning', !!pinned, pinned ? `pinned ✓ ${pinned.slice(0, 16)}…` : 'not configured (set EXPECTED_COMPOSE_HASH)'), informational: true });
+
   const all = results.filter(Boolean);
   const unavailable = [...new Set(all.flatMap((r) => r.unavailable))];
   const statuses = all.map((r) => r.tcbStatus).filter(Boolean);
   const tcbStatus = statuses.length === 0 ? null : (statuses.find((s) => s !== 'UpToDate') || 'UpToDate');
   const first = modelRes[0];
   const att = {
-    verified: checks.every((c) => c.pass),
+    verified: checks.filter((c) => !c.informational).every((c) => c.pass),
     nonce, model,
     signingAddresses: models.map((m) => m.signing_address).filter(Boolean),
     gatewaySigningAddress: report.gateway_attestation?.signing_address || null,
@@ -310,7 +392,7 @@ export async function verifyResponseSignature({ chatId, model, requestBody, resp
     const resH = parts.pop(); const reqH = parts.pop(); const signedModel = parts.join(':');
     S('sig_req', 'Signed hash matches OUR exact request bytes', reqH === myReq, myReq.slice(0, 16) + '…');
     S('sig_res', 'Signed hash matches the exact response bytes received', resH === myRes, myRes.slice(0, 16) + '…');
-    S('sig_model', 'Signed model id matches the model we requested', signedModel === '' || signedModel === model, signedModel || 'no model prefix in signed text');
+    S('sig_model', 'Signed model id matches the model we requested', signedModel === model, signedModel || 'no model prefix in signed text');
     const algo = sig?.signing_algo ?? sig?.signature_kind ?? null; // field name unconfirmed live; accept either
     S('sig_algo', 'Signature algorithm is ECDSA', algo === null || String(algo).toLowerCase() === 'ecdsa', String(algo ?? 'not reported'));
     let recovered = '';

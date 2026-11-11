@@ -6,7 +6,7 @@ import { attestModel, setDeps, deps } from '../src/attest.mjs';
 
 let env;
 const boot = async (script = {}) => { env = await installTwin({ script, realSigner: true }); };
-const failed = (a) => a.checks.filter((c) => !c.pass).map((c) => `${c.scope}:${c.id}`);
+const failed = (a) => a.checks.filter((c) => !c.pass && !c.informational).map((c) => `${c.scope}:${c.id}`);
 const has = (a, id, scope) => a.checks.some((c) => c.id === id && (!scope || c.scope === scope) && !c.pass);
 afterEach(async () => { await env?.restore(); env = null; });
 
@@ -30,7 +30,7 @@ describe('recorded real attestation, offline', () => {
     const a = await attestModel(fixture.model, '');
     assert.equal(a.verified, false);
     assert.ok(has(a, 'nonce_echo') && has(a, 'rd_nonce'));
-    assert.ok(has(a, 'gpu_nonce'));
+    assert.ok(has(a, 'gpu'), 'NRAS token eat_nonce must not match either');
   });
 
   test('tampered app_compose fails compose', async () => {
