@@ -294,7 +294,7 @@ function setSteps(active,failed){
 
 /* ---------- trust panel ---------- */
 var GROUPS=[['gateway','Gateway enclave (Intel TDX)'],['model','Model enclave (Intel TDX)'],['gpu','NVIDIA GPU confidential computing'],['signature','Response signature'],['info','Informational']];
-function renderTrust(att,sig,verified,opts){
+function renderTrust(att,sig,verified,opts,channel){
   opts=opts||{};
   var vb=$('vbadge'),body=$('tbody');clear(body);clear(vb);
   var ok=sig?!!verified:!!(att&&att.verified);
@@ -325,6 +325,15 @@ function renderTrust(att,sig,verified,opts){
   add('Signing key(s)',(function(){var w=el('span');(att.signingAddresses||[]).forEach(function(a){var d=el('div');d.appendChild(hashEl(a,8));w.appendChild(d)});if(!(att.signingAddresses||[]).length)w.textContent='none';return w})());
   add('Compose hash',hashEl(att.composeHash,10));
   if(att.measurement){add('MRTD',hashEl(att.measurement.mrtd,10));add('RTMR3',hashEl(att.measurement.rtmr3,10))}
+  if(sig||channel){
+    if(channel&&channel.tlsPinned===true){
+      var tw=el('span');tw.appendChild(el('strong',null,'Contract sent only over the attested TLS channel \u2713'));
+      tw.style.color='var(--green)';
+      var tl=el('div');tl.appendChild(tw);
+      if(channel.fingerprint){var fd=el('div');fd.appendChild(hashEl(String(channel.fingerprint),10));tl.appendChild(fd)}
+      add('Transport',tl);
+    }else add('Transport',el('span','note','Transport pinning: not active (twin mode)'));
+  }
   add('Hardware',att.hardware);
   var tcb=el('span',null,att.tcbStatus||'n/a');if(warnTcb)tcb.className='tag warn';add('TCB status',tcb);
   add('Verified at',att.verifiedAt?new Date(att.verifiedAt).toLocaleString()+' ('+att.ms+' ms)':'n/a');
@@ -383,17 +392,18 @@ $('analyze').addEventListener('click',function(){
   api('/api/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:t,source:source})}).then(function(r){
     clearTimeout(t2);if(my!==gen)return;
     if(r.verified){setSteps(3);setTimeout(function(){if(my===gen)setSteps(4)},400)}else setSteps(0,3);
-    renderTrust(r.attestation,r.signature,r.verified);
+    renderTrust(r.attestation,r.signature,r.verified,null,r.channel);
     renderAnalysis(r);
     $('results').hidden=false;
     var rs=$('analysis');setTimeout(function(){if(my===gen)rs.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})},450);
   }).catch(function(e){
     clearTimeout(t2);if(my!==gen)return;
     var i=showError($('errbox'),e);
+    var tlsMismatch=/tls|certificate/i.test(i.message||'')&&i.contractSent!==true;
     var stage=({attestation:1,config:1,input:1,inference:2,signature:3})[i.stage]||1;
     setSteps(0,stage);
-    if(e.attestation)renderTrust(e.attestation,null,false,{notSent:!i.contractSent});
-    else if(i.stage==='attestation'||i.code==='ATTESTATION_UNAVAILABLE'){var vb=$('vbadge');clear(vb);clear($('tbody'));vb.className='vbadge bad';vb.textContent='UNVERIFIED';vb.appendChild(el('span','sub',i.message));if(!i.contractSent){var ns=el('div','vbadge bad','Contract NOT sent');ns.style.marginTop='10px';$('tbody').appendChild(ns)}}
+    if(e.attestation)renderTrust(e.attestation,null,false,{notSent:!i.contractSent||tlsMismatch});
+    else if(i.stage==='attestation'||tlsMismatch||i.code==='ATTESTATION_UNAVAILABLE'){var vb=$('vbadge');clear(vb);clear($('tbody'));vb.className='vbadge bad';vb.textContent='UNVERIFIED';vb.appendChild(el('span','sub',i.message));if(!i.contractSent||tlsMismatch){var ns=el('div','vbadge bad','Contract NOT sent');ns.style.marginTop='10px';$('tbody').appendChild(ns)}}
     else if(i.stage==='inference'||i.stage==='signature'){/* leave previous trust panel */}
   }).then(function(){setBusy(false)});
 });
@@ -438,7 +448,7 @@ $('ask').addEventListener('click',function(){
   clear($('ask-err'));clear($('ask-out'));var my=gen;setBusy(true);$('ask').textContent='Asking...';
   api('/api/ask',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:t,question:q})}).then(function(r){
     if(my!==gen)return;
-    renderTrust(r.attestation,r.signature,r.verified);
+    renderTrust(r.attestation,r.signature,r.verified,null,r.channel);
     var o=$('ask-out');clear(o);
     if(!r.verified)o.appendChild(el('div','alert red','UNVERIFIED RESPONSE: do not rely on this answer.'));
     o.appendChild(el('div',null,r.answer));
