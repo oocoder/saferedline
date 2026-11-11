@@ -20,7 +20,7 @@ After the response: exact request and response bytes were signed (EIP-191) by a 
 
 1. **Gateway and model still see plaintext.** TLS pinning (see (a) below) shows the endpoint is the attested gateway, not that its code is benign; the gateway forwards plaintext to the attested model.
 2. **Enclave code behavior.** Compose hash is displayed (pin optional via `EXPECTED_COMPOSE_HASH`), not pinned to a known-good release; image digests vs claimed weights not checked.
-3. **Our server.** Not in a TEE. Zero retention is a code-level claim (no DB, no user-data cache, no write paths; evidence: sentinel test `tests/pipeline.test.mjs#L195`). Swap and core dumps are out of scope.
+3. **Our server.** Not in a TEE. Zero retention is a code-level claim (no DB, no user-data cache, no write paths; evidence: sentinel test in [`tests/pipeline.test.mjs`](../tests/pipeline.test.mjs#L238)). Swap and core dumps are out of scope.
 4. **Model correctness.** Output may be wrong; `quoteFound` is only a verbatim-quote guard.
 
 ## Deferred limits (from separate-agent review)

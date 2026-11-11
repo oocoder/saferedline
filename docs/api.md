@@ -17,6 +17,7 @@ Attestation = {
   appName: string | null, composeHash: string | null,
   tcbStatus: string | null,                       // 'UpToDate' → shown green, any other accepted status amber
   measurement: { mrtd: string, rtmr3: string, mrConfigId: string } | null,
+  evidence: 'recorded' | 'live',                  // 'recorded' in twin mode (replayed real evidence)
   hardware: string, gpuCount: number | null,
   checks: Check[], verifiedAt: string /*ISO*/, ms: number
 }
@@ -41,7 +42,7 @@ Channel = { tlsPinned: boolean, fingerprint: string | null, note: string }
 
 `channel` reports whether the contract and signature requests were sent only over TLS whose leaf SPKI sha256 equals `attestation.gatewayTlsFingerprint`. The `tls_bound` check counts toward `verified` by default; Binding and pinning are always enforced: any proxy or CDN in front of the NEAR gateway TEE fails closed. A pin mismatch is `ATTESTATION_FAILED` and the contract is not sent.
 
-**Twin mode:** `npm run twin` replays recorded real attestation evidence and simulates the model. `TWIN_SCRIPT=<name>` selects a scripted behavior; the full list is `TWIN_SCRIPTS` in [`tests/twin/install.mjs`](../tests/twin/install.mjs) (for example `ok`, `tampered_res`, `wrong_signer`, `attestation_failed`, `attestation_unavailable`, `nras_down`, `xss`).
+**Twin mode:** `npm run twin` replays recorded real attestation evidence (`attestation.evidence` is `"recorded"`) and simulates the model; twin analyze/ask responses also carry a `twinSignerNote` explaining that the response signer is a local test key. `TWIN_SCRIPT=<name>` selects a scripted behavior; the full list is `TWIN_SCRIPTS` in [`tests/twin/install.mjs`](../tests/twin/install.mjs) (for example `ok`, `tampered_res`, `wrong_signer`, `attestation_failed`, `attestation_unavailable`, `nras_down`, `xss`).
 
 **Error envelope (every non-2xx):**
 

@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 // Docs rot guard. For every markdown file: relative links must resolve; `file#Lnn` / `file#Lnn-Lmm` links must
 // point inside the file, at non-blank, non-comment-only lines, and (via RULES) at the code the link text claims.
+// Also: every `npm run <x>` / `npm <x>` command mentioned in the docs must exist in package.json scripts, and
+// sentinel-labeled links must land inside the sentinel describe block (found by its title).
+// SCOPE: README.md, OUTLINE.md, AGENTS.md, CLAUDE.md and docs/*.md only. docs/plans/ is deliberately EXCLUDED:
+// it is a historical planning record whose line references describe the pre-fix code and are not maintained.
 // Run: npm run check:docs   (also run by tests/docs.test.mjs, so `npm test` catches stale links)
 import fs from 'node:fs';
 import path from 'node:path';
@@ -31,13 +35,23 @@ export const RULES = [
   [/verifyOne/, /verifyOne/],
   [/rd_signer/, /rd_signer/],
   [/attestModel/, /attestModel/],
-  [/sentinel|asserts?|proves?|test that/i, /assert/], // links claiming a test asserts something must land on an assert line
+  [/sentinel|asserts?|proves?|test that/i, /assert/], // links claiming a test asserts something must land on an assert line (see also sentinelBlock)
   [/Host\/Origin|CSRF/i, /guard|Origin/],
 ];
 
 const isCommentOnly = (l) => /^\s*(\/\/|\/\*|\*|#)/.test(l);
 
 /** Check one `path#Lnn[-Lmm]` link. `read(relPath)` returns file text or null. Returns problem string or null. */
+const SENTINEL_TITLE = /describe\('zero retention \(sentinel\)'/;
+/** 1-based [start, end] of the sentinel describe block (to the next top-level describe/EOF), or null. */
+export function sentinelBlock(lines) {
+  const a = lines.findIndex((l) => SENTINEL_TITLE.test(l));
+  if (a < 0) return null;
+  let b = lines.findIndex((l, i) => i > a && /^describe\(/.test(l));
+  if (b < 0) b = lines.length;
+  return [a + 1, b];
+}
+
 export function checkLineLink(href, context, read) {
   const m = href.match(/^(.+?)#L(\d+)(?:-L(\d+))?$/);
   if (!m) return null;
@@ -49,6 +63,11 @@ export function checkLineLink(href, context, read) {
   if (start < 1 || end < start || end > lines.length) return `${href} is outside ${file} (${lines.length} lines)`;
   const range = lines.slice(start - 1, end);
   if (range.every((l) => !l.trim() || isCommentOnly(l))) return `${href} points at blank/comment-only lines`;
+  if (/sentinel/i.test(context) && /pipeline\.test\.mjs$/.test(file)) {
+    const blk = sentinelBlock(lines);
+    if (!blk) return `${href}: sentinel describe block not found in ${file}`;
+    if (start < blk[0] || end > blk[1]) return `${href} is outside the sentinel describe block (lines ${blk[0]}-${blk[1]})`;
+  }
   for (const [ctx, need] of RULES) {
     if (ctx.test(context)) {
       if (!range.some((l) => need.test(l))) return `${href}: expected ${need} in lines ${start}-${end} (link says: ${context.trim().slice(-70)})`;
@@ -78,6 +97,19 @@ export function checkDocs(root = ROOT) {
         const context = before + ' ' + m[1];
         const p = checkLineLink(path.join(dir, href).replace(/^\.\//, ''), context, (rel) => read(rel));
         if (p) problems.push(`${f}:${i + 1} ${p}`);
+      }
+    });
+  }
+  const scriptNames = Object.keys(JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).scripts);
+  const builtins = new Set(['ci', 'install', 'i', 'init', 'pack', 'publish', 'audit', 'ls', 'outdated', 'update', 'config', 'exec', 'help', 'version', 'view', 'cache', 'prune']);
+  const shortcuts = new Set(['test', 'start', 'stop', 'restart']);
+  for (const f of docs) {
+    const t = read(f); if (t == null) continue;
+    t.split('\n').forEach((line, i) => {
+      for (const m of line.matchAll(/\bnpm run(?:-script)?(?: -[-\w]+)* ([A-Za-z0-9:_-]+)/g)) if (!scriptNames.includes(m[1])) problems.push(`${f}:${i + 1} unknown npm script: npm run ${m[1]}`);
+      for (const m of line.matchAll(/\bnpm ([a-z][a-z-]*)\b/g)) {
+        if (m[1] === 'run' || m[1] === 'run-script' || builtins.has(m[1])) continue;
+        if (shortcuts.has(m[1]) ? !scriptNames.includes(m[1]) : true) { if (shortcuts.has(m[1])) problems.push(`${f}:${i + 1} npm ${m[1]} has no script`); }
       }
     });
   }

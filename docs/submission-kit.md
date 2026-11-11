@@ -20,6 +20,8 @@ Rules: [submission-research.md](submission-research.md). Submit once, before 202
 | website | leave EMPTY (spam trap: any non-empty value rejects the submission) |
 | consent | `true`, only after the human agrees to this notice verbatim: "I agree that the organizers may use these details to review our submission and contact us about this hackathon." |
 
+Alternative path: HACKATHON.md allows an agent to file the submission via the API after the human confirms the full payload. The agent must show the whole payload, wait for the human's OK, send it once with a single `requestId`, and never include a `website` field.
+
 Field name note: the form labels and the API names differ slightly (`leadName` in the API for team lead; `size` for team size). If submitting by API, use the names in [submission-research.md](submission-research.md) and include a `requestId` UUID; show the human the full payload before sending.
 
 ### idea (1797 characters)
@@ -44,18 +46,18 @@ NEAR is load-bearing: NEAR AI Cloud runs the open-weight model in the TEE and ex
 
 ## X post (HUMAN posts; agents never post)
 
-Requirements: public post; says it was built at NEAR HACKATHON; tags @NEARProtocol and #NEARHackathon; video or screenshots attached. Counts below treat the link as 23 characters (how X counts links). Optional tags: @buidlcity @nearlegion @NearBuilders (check the length if you add them).
+Requirements (Build City hackpack section 6): public post; says it was built at NEAR HACKATHON; tags @buidlcity, @NEARProtocol, @nearlegion and #NEARHackathon (all four are in both variants); video or screenshots attached. Counts treat the link as 23 characters (how X counts links). @NearBuilders is optional (recount if added).
 
-**Variant A (273 chars)** problem first, then the one moment, then NEAR's role:
-
-```
-You can't paste an NDA into a chatbot. SafeRedline reviews it inside a NEAR AI Cloud TEE, but only after verifying the enclave live (Intel TDX + NVIDIA, TLS pinned) and checking the signed answer. Built at NEAR HACKATHON @NEARProtocol #NEARHackathon https://github.com/oocoder/saferedline
-```
-
-**Variant B (262 chars)** leads with the trust angle instead of the user problem:
+**Variant A (278 chars)** problem first, then the one moment, then NEAR's role:
 
 ```
-A privacy policy isn't proof. SafeRedline sends your NDA to a NEAR AI Cloud TEE only after verifying the enclave, then checks the enclave's signature on the answer. Built at NEAR HACKATHON @NEARProtocol #NEARHackathon https://github.com/oocoder/saferedline What should it flag?
+Can't paste an NDA into a chatbot. SafeRedline reviews it in a NEAR AI Cloud TEE, only after verifying the enclave (Intel TDX, NVIDIA, pinned TLS) and checking the signed answer. Built at NEAR HACKATHON @buidlcity @NEARProtocol @nearlegion #NEARHackathon https://github.com/oocoder/saferedline
+```
+
+**Variant B (264 chars)** leads with the trust angle instead of the user problem:
+
+```
+A privacy policy isn't proof. SafeRedline sends your NDA to a NEAR AI Cloud TEE only after verifying the enclave, then checks the enclave's signature on the answer. Built at NEAR HACKATHON @buidlcity @NEARProtocol @nearlegion #NEARHackathon https://github.com/oocoder/saferedline
 ```
 
 Tip: put a question as the first reply, e.g. "What clause would you want it to catch first?"

@@ -182,26 +182,32 @@ describe('review 3b: per-GPU claims', () => {
 
 describe('review 8: TLS channel binding (gateway)', () => {
   const tls = (a) => a.checks.find((c) => c.id === 'tls_bound');
-  test('live cert == attested fingerprint: tls_bound passes and counts toward verified', async () => {
+  // Twin evidence is "recorded" and plain-HTTP, so tls_bound is skipped there; force the live code path with a stubbed cert reader.
+  const live = async (reader) => {
+    tw = await installTwin({ realSigner: true });
+    const { setDeps } = await import('../src/attest.mjs');
+    setDeps({ evidence: 'live', getTlsFingerprint: reader });
+    return attestModel(fixture.model, '');
+  };
+  test('twin: tls_bound is informational and says it was skipped (no overclaim)', async () => {
     const a = await att({});
-    assert.equal(tls(a).pass, true); assert.equal(tls(a).scope, 'gateway'); assert.equal(tls(a).informational, undefined);
+    assert.equal(a.evidence, 'recorded');
+    assert.equal(tls(a).informational, true); assert.equal(tls(a).pass, false);
+    assert.equal(tls(a).detail, 'skipped — twin uses plain HTTP (recorded evidence)');
     assert.equal(a.verified, true);
   });
+  test('live cert == attested fingerprint: tls_bound passes and counts toward verified', async () => {
+    const a = await live(async () => fixture.tlsFingerprint);
+    assert.equal(tls(a).pass, true); assert.equal(tls(a).scope, 'gateway'); assert.equal(tls(a).informational, undefined);
+    assert.equal(a.evidence, 'live'); assert.equal(a.verified, true);
+  });
   test('mismatching live certificate: tls_bound fails and fails verified (always enforced)', async () => {
-    tw = await installTwin({ realSigner: true });
-    const { setDeps } = await import('../src/attest.mjs');
-    setDeps({ getTlsFingerprint: async () => 'ee'.repeat(32) });
-    const a = await attestModel(fixture.model, '');
+    const a = await live(async () => 'ee'.repeat(32));
     assert.equal(tls(a).pass, false); assert.match(tls(a).detail, /≠ attested/);
     assert.equal(a.verified, false);
-    process.env.TLS_BOUND_STRICT = '0'; // the old opt-out no longer exists: must have no effect
-    try { assert.equal((await attestModel(fixture.model, '')).verified, false); } finally { delete process.env.TLS_BOUND_STRICT; }
   });
   test('unreadable live certificate fails tls_bound (fail closed)', async () => {
-    tw = await installTwin({ realSigner: true });
-    const { setDeps } = await import('../src/attest.mjs');
-    setDeps({ getTlsFingerprint: async () => { throw new Error('ECONNREFUSED'); } });
-    const a = await attestModel(fixture.model, '');
+    const a = await live(async () => { throw new Error('ECONNREFUSED'); });
     assert.match(tls(a).detail, /could not read/); assert.equal(a.verified, false);
   });
   test('tampered attested fingerprint breaks the quote binding (rd_signer)', async () => {

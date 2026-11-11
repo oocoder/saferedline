@@ -85,11 +85,13 @@ export function createTwin({ tls } = {}) {
       const body = Buffer.concat(chunks);
       twin.requests.push(`${req.method} ${u.pathname}`);
       const json = (status, obj) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(typeof obj === 'string' ? obj : JSON.stringify(obj)); };
-      const s = twin.script;
+      const hdr = req.headers['x-twin-script'];
+      const s = hdr && twin.resolve ? twin.resolve(hdr) : twin.script; // per-request override replaces the global script
       try {
         if (req.method === 'GET' && u.pathname === '/v1/attestation/report') {
           const m = s.attestation || 'fixture';
           if (m === '503') return json(503, { error: { message: 'twin: attestation unavailable' } });
+          if (m === '401') return json(401, { error: { message: 'twin: bad key' } });
           if (m === 'hang') return;
           const rep = structuredClone(fixture.report);
           if (m === 'tampered_compose') {

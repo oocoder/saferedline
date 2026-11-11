@@ -13,9 +13,10 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { analyzeContract, askFollowUp, listTeeModels, cfg } from './near.mjs';
+import { analyzeContract, askFollowUp, listTeeModels, cfg, keyConfigured } from './near.mjs';
 import { attestModel, endpointOverrides } from './attest.mjs';
 import { AppError } from './errors.mjs';
+import { twinCtx, TWIN_HEADER_ALLOWLIST } from './twinctx.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MAX_BODY = 2 * 1024 * 1024; // raw JSON bytes
@@ -131,7 +132,7 @@ export function createServer({ mode = 'live', host = '127.0.0.1', hostedDemo = f
   const routes = {
     'GET /': (req, res) => send(res, 200, indexHtml(), 'text/html; charset=utf-8'),
     'GET /api/samples': (req, res) => send(res, 200, samples()),
-    'GET /api/health': (req, res) => send(res, 200, { ok: true, model: cfg.model, apiKeyConfigured: mode === 'twin' ? false : Boolean(cfg.apiKey), ...(mode === 'twin' ? { twinFakeKey: true } : {}), mode: hostedDemo ? 'hosted-demo' : mode, persistence: 'none', bind: host, version: VERSION, warnings: endpointOverrides.length ? [`Endpoint override active (${endpointOverrides.join(', ')}): attestation/contract traffic is not going to the default NEAR/Intel/NVIDIA endpoints.`] : [] }),
+    'GET /api/health': (req, res) => send(res, 200, { ok: true, model: cfg.model, apiKeyConfigured: mode === 'twin' ? false : keyConfigured(), ...(mode === 'twin' ? { twinFakeKey: true } : {}), mode: hostedDemo ? 'hosted-demo' : mode, persistence: 'none', bind: host, version: VERSION, warnings: endpointOverrides.length ? [`Endpoint override active (${endpointOverrides.join(', ')}): attestation/contract traffic is not going to the default NEAR/Intel/NVIDIA endpoints.`] : [] }),
     'GET /api/models': async (req, res) => send(res, 200, await listTeeModels()),
     // Attestation alone needs no API key — judges can verify the enclave independently.
     'GET /api/attest': async (req, res) => send(res, 200, await attestModel(cfg.model, cfg.apiKey)),
@@ -174,7 +175,10 @@ export function createServer({ mode = 'live', host = '127.0.0.1', hostedDemo = f
     try {
       guard(req);
       if (!handler) throw new AppError('Not found', { status: 404, code: 'NOT_FOUND', stage: 'input' });
-      await handler(req, res);
+      // X-Twin-Script: honoured ONLY in twin mode (never live, never hosted-demo); per-request via AsyncLocalStorage.
+      const twinScript = mode === 'twin' && !hostedDemo ? String(req.headers['x-twin-script'] || '').toLowerCase() : '';
+      if (twinScript && !TWIN_HEADER_ALLOWLIST.includes(twinScript)) throw new AppError(`X-Twin-Script must be one of: ${TWIN_HEADER_ALLOWLIST.join(', ')}`, { status: 400, code: 'BAD_INPUT', stage: 'input' });
+      if (twinScript) await twinCtx.run({ script: twinScript }, () => handler(req, res)); else await handler(req, res);
     } catch (e) {
       const [status, body] = envelope(e);
       if (!res.headersSent) send(res, status, body, 'application/json', e.retryAfter ? { 'Retry-After': String(e.retryAfter) } : {}); else res.end();
@@ -208,7 +212,7 @@ async function main() {
       console.log(`  TWIN MODE (script: ${process.env.TWIN_SCRIPT || 'ok'}): simulated NEAR, recorded real attestation — NOT a real TEE`);
     } else {
       console.log(`  Model: ${cfg.model} (NEAR AI Cloud, Confidential TEE)`);
-      console.log(`  API key: ${cfg.apiKey ? (cfg.apiKey.startsWith('sk-') ? 'configured' : 'configured (WARNING: NEAR AI Cloud keys start with "sk-")') : 'MISSING — set NEAR_API_KEY in .env'}`);
+      console.log(`  API key: ${keyConfigured() ? 'configured' : 'NOT CONFIGURED (empty, placeholder, or not an sk- key) — set NEAR_API_KEY in .env; analysis will return NO_API_KEY'}`);
     }
     if (hostedDemo) console.log('  HOSTED DEMO: bundled fictional samples only; per-IP + daily rate limits (in memory)');
     console.log('  Persistence: none (no disk, no DB, no content logging)\n');

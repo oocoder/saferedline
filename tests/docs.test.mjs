@@ -20,3 +20,27 @@ test('checker catches stale links (self-test)', () => {
   assert.equal(checkLineLink('src/x.mjs#L4-L5', 'dropped after use', read), null);
   assert.match(checkLineLink('src/x.mjs#L5-L4', 'x', read), /outside/);
 });
+
+import { sentinelBlock } from '../scripts/check_docs.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+test('sentinel links must land inside the sentinel describe block', () => {
+  const src = ["describe('other', () => {", '  assert.ok(1);', '});', '', "describe('zero retention (sentinel)', () => {", '  assert.ok(2);', '});', '', "describe('after', () => {", '  assert.ok(3);', '});'].join('\n');
+  assert.deepEqual(sentinelBlock(src.split('\n')), [5, 8]);
+  const rd = (rel) => (rel === 'tests/pipeline.test.mjs' ? src : null);
+  assert.equal(checkLineLink('tests/pipeline.test.mjs#L6', 'the sentinel test', rd), null);
+  assert.match(checkLineLink('tests/pipeline.test.mjs#L2', 'the sentinel test', rd), /outside the sentinel describe block/);
+  assert.match(checkLineLink('tests/pipeline.test.mjs#L10', 'the sentinel test', rd), /outside the sentinel describe block/);
+});
+
+test('docs commands: unknown `npm run x` and missing shortcut scripts are reported; docs/plans is not scanned', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'docs-'));
+  fs.mkdirSync(path.join(root, 'docs', 'plans'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { test: 'x', twin: 'y' } }));
+  fs.writeFileSync(path.join(root, 'README.md'), 'Run `npm run twin` then `npm test`, `npm ci`, but not `npm run bogus` or `npm start`.\n');
+  fs.writeFileSync(path.join(root, 'docs', 'plans', 'old.md'), '`npm run ghost`\n');
+  const { problems } = checkDocs(root);
+  assert.deepEqual(problems.map((p) => p.replace(/^README.md:\d+ /, '')).sort(), ['npm start has no script', 'unknown npm script: npm run bogus']);
+});
