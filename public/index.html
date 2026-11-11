@@ -153,7 +153,7 @@ input[type=text]{width:100%;background:var(--bg);color:var(--ink);border:1px sol
     <div id="samples" class="row" style="margin-top:0"><span class="note">Loading samples...</span></div>
     <div style="margin-top:14px">
       <label class="lbl" id="lbltext" for="text">Paste contract text, or load a file</label>
-      <textarea id="text" spellcheck="false" placeholder="Paste a contract or NDA here. Nothing is stored; it is sent only to the verified enclave."></textarea>
+      <textarea id="text" spellcheck="false" placeholder="Paste a contract or NDA here. Nothing is stored. It goes only to the verified enclave."></textarea>
     </div>
     <div class="row">
       <label class="btn" id="uploadlbl" for="file" style="display:inline-block">Upload .txt / .pdf</label>
@@ -161,7 +161,7 @@ input[type=text]{width:100%;background:var(--bg);color:var(--ink);border:1px sol
       <button class="btn" id="clear" type="button">Clear</button>
       <span class="note counter mono" id="count">0 chars</span>
     </div>
-    <p class="note" id="filenote" style="margin:8px 0 0">Files are parsed in your browser. File bytes never leave this page; only extracted text is sent, and only to your local SafeRedline server.</p>
+    <p class="note" id="filenote" style="margin:8px 0 0">Files are read in your browser. Only the extracted text is sent, and only to your local SafeRedline server.</p>
     <p class="note" id="hostednote" hidden style="margin:8px 0 0"><strong>Samples only.</strong> This hosted demo accepts the bundled fictional contracts. Run SafeRedline locally to review a real one.</p>
     <div class="row">
       <button class="btn primary" id="analyze" type="button">Analyze privately</button>
@@ -225,7 +225,7 @@ function buildMarkdown(r){
   var mp=a.missing_protections||[];
   if(mp.length){L.push('## Missing standard protections','');mp.forEach(function(m){L.push('- '+m)});L.push('')}
   var att=r.attestation||{},twin=(health&&health.mode==='twin')||att.evidence==='recorded';
-  L.push('---',(twin?'Reviewed against RECORDED evidence (twin, simulated model)':(r.verified?'Reviewed in a verified NEAR AI Cloud TEE':'UNVERIFIED response: not proven to come from the enclave'))+' \u00B7 nonce '+String(att.nonce||'n/a').slice(0,16)+' \u00B7 '+(att.verifiedAt||new Date().toISOString()));
+  L.push('---',(twin?'Reviewed against recorded evidence (twin, simulated model)':(r.verified?'Reviewed in a verified NEAR AI Cloud TEE':'Unverified response: not proven to come from the enclave'))+' \u00B7 nonce '+String(att.nonce||'n/a').slice(0,16)+' \u00B7 '+(att.verifiedAt||new Date().toISOString()));
   return L.join('\n');
 }
 function copyText(t,btn){
@@ -250,7 +250,7 @@ function api(path,opts){
         var e2=new Error(err.message);e2.info=err;e2.attestation=j&&j.attestation;e2.retryAfter=r.headers.get('retry-after');throw e2}
       if(j==null)throw Object.assign(new Error('Server returned invalid JSON'),{info:{code:'INTERNAL',message:'Server returned invalid JSON',stage:'server',contractSent:false}});
       return j});
-  },function(){throw Object.assign(new Error('Cannot reach the local SafeRedline server.'),{info:{code:'NETWORK',message:'Cannot reach the local SafeRedline server.',stage:'server',contractSent:false}})});
+  },function(){throw Object.assign(new Error('Can\'t reach the SafeRedline server. Please try again in a moment.'),{info:{code:'NETWORK',message:'Can\'t reach the SafeRedline server. Please try again in a moment.',stage:'server',contractSent:false}})});
 }
 
 /* ---------- health + samples ---------- */
@@ -268,7 +268,7 @@ api('/api/health').then(function(h){
   }
   if(h.mode==='twin'){$('twin').classList.add('on');$('attacks').hidden=false}
   if(h.warnings&&h.warnings.length){var wn=$('warn');h.warnings.forEach(function(w){wn.appendChild(el('div',null,'Warning: '+w))});wn.classList.add('on')}
-  if(!h.apiKeyConfigured&&h.mode!=='twin'&&!h.twinFakeKey){$('inputmsg').textContent='No NEAR API key configured: analysis unavailable, but you can still verify the enclave.'}
+  if(!h.apiKeyConfigured&&h.mode!=='twin'&&!h.twinFakeKey){$('inputmsg').textContent='No NEAR API key is set, so analysis isn\'t available. You can still verify the enclave.'}
 }).catch(function(){$('hmode').textContent='server unreachable'});
 api('/api/samples').then(function(list){
   var box=$('samples');clear(box);box.appendChild(el('span','note','Try a fictional sample:'));
@@ -288,7 +288,7 @@ $('file').addEventListener('change',function(ev){
   var msg=$('inputmsg');msg.textContent='';
   var isPdf=/\.pdf$/i.test(f.name)||f.type==='application/pdf';
   if(isPdf){
-    if(!window.pdfjsLib){msg.textContent='PDF support failed to load (offline?). Paste the text instead.';return}
+    if(!window.pdfjsLib){msg.textContent='PDF support didn\'t load (are you offline?). Paste the text instead.';return}
     msg.textContent='Reading PDF in your browser...';
     pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     var fr=new FileReader();
@@ -300,16 +300,16 @@ $('file').addEventListener('change',function(ev){
         return p.then(function(){return out.join('\n\n')});
       }).then(function(t){
         t=t.trim();
-        if(t.length<20){msg.textContent='Scanned PDF, paste text instead (no text layer found).';return}
+        if(t.length<20){msg.textContent='This looks like a scanned PDF with no text layer. Paste the text instead.';return}
         $('text').value=t;source='pdf';wipeResults();upd();msg.textContent='Loaded '+f.name+' (parsed in your browser).';
-      }).catch(function(){msg.textContent='Could not read that PDF. Paste the text instead.'});
+      }).catch(function(){msg.textContent='We couldn\'t read that PDF. Paste the text instead.'});
     };
-    fr.onerror=function(){msg.textContent='Could not read that file.'};
+    fr.onerror=function(){msg.textContent='We couldn\'t read that file.'};
     fr.readAsArrayBuffer(f);
   }else{
     var r=new FileReader();
     r.onload=function(){$('text').value=String(r.result);source='txt';wipeResults();upd();msg.textContent='Loaded '+f.name+'.'};
-    r.onerror=function(){msg.textContent='Could not read that file.'};
+    r.onerror=function(){msg.textContent='We couldn\'t read that file.'};
     r.readAsText(f);
   }
 });
@@ -341,15 +341,15 @@ function renderTrust(att,sig,verified,opts,channel){
   if(ok){
     vb.className='vbadge '+(warnTcb?'warn':'ok');
     var isTwin=(health&&health.mode==='twin')||(att&&att.evidence==='recorded');
-    vb.appendChild(document.createTextNode(isTwin?(sig?'Verified against RECORDED evidence (twin, simulated model)':'Recorded evidence verified (twin)'):(sig?'Hardware TEE verified, zero data retention':'Enclave verified')));
+    vb.appendChild(document.createTextNode(isTwin?(sig?'Verified against recorded evidence (twin, simulated model)':'Recorded evidence verified (twin)'):(sig?'Hardware TEE verified, zero data retention':'Enclave verified')));
     if(!sig){var s0=el('span','sub','Attestation only. No contract was sent.');vb.appendChild(s0)}
     if(warnTcb)vb.appendChild(el('span','sub','Warning: TCB status is '+att.tcbStatus+' (not UpToDate).'));
   }else{
     vb.className='vbadge bad';
-    vb.appendChild(document.createTextNode(sig?'UNVERIFIED RESPONSE':'UNVERIFIED'));
+    vb.appendChild(document.createTextNode(sig?'Unverified response':'Unverified'));
     vb.appendChild(el('span','sub',sig?'The answer could not be proven to come from the attested enclave. Do not rely on it.':'The enclave failed verification.'));
   }
-  if(opts.notSent){var ns=el('div','vbadge bad',null);ns.style.marginTop='10px';ns.textContent='Contract NOT sent';ns.appendChild(el('span','sub','Verification failed before any contract text left this machine.'));body.appendChild(ns)}
+  if(opts.notSent){var ns=el('div','vbadge bad',null);ns.style.marginTop='10px';ns.textContent='Contract not sent';ns.appendChild(el('span','sub','Verification failed before any contract text left this machine.'));body.appendChild(ns)}
   if(!att)return;
   var big=el('div','bignum');
   var nChecks=att.checks.concat(sig?sig.checks:[]).filter(function(c){return !c.informational});
@@ -360,7 +360,7 @@ function renderTrust(att,sig,verified,opts,channel){
 
   var kv=el('dl','kv');
   function add(k,v){kv.appendChild(el('dt',null,k));var d=el('dd');if(v instanceof Node)d.appendChild(v);else d.textContent=v==null?'n/a':v;kv.appendChild(d)}
-  add((health&&health.mode==='twin')||att.evidence==='recorded'?'Nonce (recorded \u2014 twin replays a real recorded attestation)':'Fresh nonce',hashEl(att.nonce,10));
+  add((health&&health.mode==='twin')||att.evidence==='recorded'?'Nonce (recorded; the twin replays a real recorded attestation)':'Fresh nonce',hashEl(att.nonce,10));
   add('Model',el('span','mono',att.model||'n/a'));
   var twinMode=(health&&health.mode==='twin')||att.evidence==='recorded';
   add(twinMode?'Attested signer(s) (recorded)':'Signing key(s)',(function(){var w=el('span');(att.signingAddresses||[]).forEach(function(a){var d=el('div');d.appendChild(hashEl(a,8));w.appendChild(d)});if(!(att.signingAddresses||[]).length)w.textContent='none';return w})());
@@ -411,14 +411,14 @@ function renderTrust(att,sig,verified,opts,channel){
 /* ---------- errors ---------- */
 function showError(box,e){
   clear(box);var i=e.info||{code:'INTERNAL',message:e.message,stage:'server',contractSent:false};
-  if(i.code==='BAD_ORIGIN')i=Object.assign({},i,{message:'Blocked: open SafeRedline via http://localhost or http://127.0.0.1 (same host as the server). '+(i.message||'')});
-  if(i.code==='UNSUPPORTED_MEDIA_TYPE')i=Object.assign({},i,{message:'Request rejected: unsupported content type. '+(i.message||'')});
+  if(i.code==='BAD_ORIGIN')i=Object.assign({},i,{message:'Blocked. Please open SafeRedline at http://localhost or http://127.0.0.1, the same host as the server. '+(i.message||'')});
+  if(i.code==='UNSUPPORTED_MEDIA_TYPE')i=Object.assign({},i,{message:'We couldn\'t accept that request: unsupported content type. '+(i.message||'')});
   if(i.code==='SAMPLES_ONLY')i=Object.assign({},i,{message:'The hosted demo only reviews the bundled fictional samples. Pick one of the sample buttons, or run SafeRedline locally for a real contract.'});
-  if(i.code==='RATE_LIMITED'){var secs=parseInt(e.retryAfter,10),mins=secs>0?Math.max(1,Math.ceil(secs/60)):null;i=Object.assign({},i,{message:'The hosted demo is rate limited to keep it free for everyone. '+(mins?'Try again in '+mins+' min.':'Try again in a few minutes.')})}
+  if(i.code==='RATE_LIMITED'){var secs=parseInt(e.retryAfter,10),mins=secs>0?Math.max(1,Math.ceil(secs/60)):null;i=Object.assign({},i,{message:'To keep the hosted demo free for everyone, we limit how often it runs. '+(mins?'Please try again in '+mins+' min.':'Please try again in a few minutes.')})}
   var a=el('div','alert '+((i.stage==='config'||i.code==='RATE_LIMITED'||i.code==='SAMPLES_ONLY')?'amber':'red'));a.setAttribute('role','alert');
   a.appendChild(document.createTextNode(i.message||'Something went wrong'));
   var sub=el('div','sub mono');sub.textContent=i.code+' | stage: '+i.stage;a.appendChild(sub);
-  var ns=el('div','sub');ns.textContent=i.contractSent?'Your contract WAS sent to the enclave before this failure. No output is trusted.':'Contract NOT sent. Nothing left this machine.';ns.style.fontWeight='700';a.appendChild(ns);
+  var ns=el('div','sub');ns.textContent=i.contractSent?'Your contract was sent to the enclave before this failure. Don\'t trust any output.':'Contract not sent. Nothing left this machine.';ns.style.fontWeight='700';a.appendChild(ns);
   box.appendChild(a);
   return i;
 }
@@ -452,7 +452,7 @@ function runAnalyze(script){
     var stage=({attestation:1,config:1,input:0,inference:2,signature:3})[i.stage];if(stage===undefined)stage=1;
     setSteps(0,stage||undefined);
     if(e.attestation)renderTrust(e.attestation,null,false,{notSent:!i.contractSent||tlsMismatch});
-    else if(i.stage==='attestation'||tlsMismatch||i.code==='ATTESTATION_UNAVAILABLE'){var vb=$('vbadge');clear(vb);clear($('tbody'));vb.className='vbadge bad';vb.textContent='UNVERIFIED';vb.appendChild(el('span','sub',i.message));if(!i.contractSent||tlsMismatch){var ns=el('div','vbadge bad','Contract NOT sent');ns.style.marginTop='10px';$('tbody').appendChild(ns)}}
+    else if(i.stage==='attestation'||tlsMismatch||i.code==='ATTESTATION_UNAVAILABLE'){var vb=$('vbadge');clear(vb);clear($('tbody'));vb.className='vbadge bad';vb.textContent='Unverified';vb.appendChild(el('span','sub',i.message));if(!i.contractSent||tlsMismatch){var ns=el('div','vbadge bad','Contract not sent');ns.style.marginTop='10px';$('tbody').appendChild(ns)}}
     else if(i.stage==='inference'||i.stage==='signature'){/* leave previous trust panel */}
   }).then(function(){setBusy(false)});
 }
@@ -464,7 +464,7 @@ function renderAnalysis(r){
   var hd=el('div');hd.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px';hd.appendChild(el('h2',null,'2. Redline report'));hd.firstChild.style.margin='0';
   if((a.flagged_clauses||[]).length){var ca=el('button','btn sm','Copy all redlines');ca.type='button';ca.addEventListener('click',function(){var md=buildMarkdown(r);var ok=function(){toast('Copied')};if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(md).then(ok,function(){copyText(md,ca);ok()});else{copyText(md,ca);ok()}});hd.appendChild(ca)}
   box.appendChild(hd);
-  if(!r.verified){var w=el('div','alert red','UNVERIFIED RESPONSE: this output could not be proven to come from the attested enclave. Treat it as untrusted.');w.setAttribute('role','alert');box.appendChild(w)}
+  if(!r.verified){var w=el('div','alert red','Unverified response. We couldn\'t prove this output came from the attested enclave, so treat it as untrusted.');w.setAttribute('role','alert');box.appendChild(w)}
   if(r.analysisParseError){box.appendChild(el('div','alert amber','The model did not return structured JSON, so no clause cards could be built. Try again.'))}
   if(r.jsonMode==='prompt-only'){var jm=el('div','note','Model used prompt-only JSON mode.');jm.style.marginTop='8px';box.appendChild(jm)}
   var bar=el('div','riskbar');bar.style.marginTop='12px';
@@ -503,7 +503,7 @@ $('ask').addEventListener('click',function(){
     if(my!==gen)return;
     renderTrust(r.attestation,r.signature,r.verified,{retention:r.retention,twinSigner:pickTwin(r)},r.channel);
     var o=$('ask-out');clear(o);
-    if(!r.verified)o.appendChild(el('div','alert red','UNVERIFIED RESPONSE: do not rely on this answer.'));
+    if(!r.verified)o.appendChild(el('div','alert red','Unverified response. Please don\'t rely on this answer.'));
     o.appendChild(el('div',null,r.answer));
   }).catch(function(e){if(my!==gen)return;showError($('ask-err'),e);if(e.attestation)renderTrust(e.attestation,null,false,{notSent:!(e.info&&e.info.contractSent)})}).then(function(){setBusy(false);$('ask').textContent='Ask privately'});
 });
@@ -513,7 +513,7 @@ $('verifyonly').addEventListener('click',function(){
   if(busy)return;setBusy(true);$('verifyonly').textContent='Verifying...';
   var vb=$('vbadge');clear($('tbody'));vb.className='vbadge idle';vb.textContent='Attesting enclave with a fresh nonce...';
   api('/api/attest').then(function(att){renderTrust(att,null,att.verified)}).catch(function(e){
-    var i=e.info||{};vb.className='vbadge bad';clear(vb);vb.textContent='UNVERIFIED';vb.appendChild(el('span','sub',e.message+(i.code?' ('+i.code+')':'')));
+    var i=e.info||{};vb.className='vbadge bad';clear(vb);vb.textContent='Unverified';vb.appendChild(el('span','sub',e.message+(i.code?' ('+i.code+')':'')));
   }).then(function(){setBusy(false);$('verifyonly').textContent='Verify enclave only'});
 });
 upd();

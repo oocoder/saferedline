@@ -65,7 +65,7 @@ describe('inference over a pinned TLS connection (https twin)', () => {
     await setup('ee'.repeat(32));
     await assert.rejects(analyzeContract(CONTRACT), (e) => {
       assert.equal(e.code, 'ATTESTATION_FAILED'); assert.equal(e.contractSent, false); assert.equal(e.status, 502);
-      assert.equal(e.message, 'TLS certificate does not match the attested gateway — contract NOT sent');
+      assert.equal(e.message, 'TLS certificate does not match the attested gateway. Contract not sent.');
       assert.ok(!e.message.includes(SENTINEL));
       return true;
     });

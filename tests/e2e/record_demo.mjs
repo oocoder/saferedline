@@ -1,7 +1,7 @@
 // Records the ~70s demo video + 4 stills locally. Nothing leaves this machine.
 // Usage: BASE_URL=http://127.0.0.1:3200 OUT=.work/demo node tests/e2e/record_demo.mjs
 // Captions and the cursor dot are injected into the page ONLY during recording; the shipped UI has no overlay.
-// Only the fictional bundled samples are used. The "Contract NOT sent" still is captured from a real twin
+// Only the fictional bundled samples are used. The "Contract not sent" still is captured from a real twin
 // instance started with TWIN_SCRIPT=attestation_failed (the TWIN MODE banner stays visible; this is honest).
 import fs from 'node:fs';
 import os from 'node:os';
@@ -93,12 +93,12 @@ await caption('① Prove the enclave is real: fresh nonce · Intel TDX · NVIDIA
 await glide('#analyze'); await sleep(400);
 await page.click('#analyze');
 await sleep(4500);
-await caption('\u2461 Contract sent only over TLS bound inside the enclave');
+await caption('\u2461 Your contract travels only over TLS bound to the enclave');
 const ready = page.waitForSelector('#results:not([hidden]) .risk', { timeout: 120000 }).then(() => true);
 let waitA = 0, waitB = 0;
 if (!(await Promise.race([ready, sleep(4500).then(() => false)]))) {
   // live inference takes ~25s: keep the stepper on screen, and be honest that this stretch is sped up in the edit
-  await caption('Running inside the TEE\u2026 (real model, real hardware attestation)');
+  await caption('Running inside the TEE (real model, real hardware attestation)');
   await page.evaluate(() => { const d = document.createElement('div'); d.id = '__sp'; d.textContent = '\u23E9 sped up 3x'; d.style.cssText = 'position:fixed;right:24px;bottom:120px;z-index:2147483647;padding:8px 16px;border-radius:999px;background:#f5c04d;color:#1a1200;font:700 24px system-ui,sans-serif;pointer-events:none'; document.documentElement.appendChild(d); });
   waitA = vt() + 0.8;
   await ready;
@@ -165,7 +165,7 @@ const videoPath = await page.video().path();
 await ctx.close();
 const recordedSec = ((Date.now() - t0) / 1000).toFixed(0);
 
-// ---- 2. "Contract NOT sent" still from a real twin with TWIN_SCRIPT=attestation_failed ----
+// ---- 2. "Contract not sent" still from a real twin with TWIN_SCRIPT=attestation_failed ----
 let twin; const failPort = 3290 + Math.floor(Math.random() * 9);
 try {
   twin = spawn(process.execPath, ['src/server.mjs'], { cwd: ROOT, env: { ...process.env, PORT: String(failPort), TWIN_SCRIPT: 'attestation_failed', SAFEREDLINE_TWIN: '1' }, stdio: 'ignore' });

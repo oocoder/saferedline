@@ -56,7 +56,7 @@ function send(res, status, body, type = 'application/json', extra = {}) {
 
 // Hosted demo: the public sees fixed messages for upstream-derived failures (no upstream snippets, no key hints).
 const HOSTED_MESSAGES = {
-  ATTESTATION_UNAVAILABLE: 'An attestation source (NEAR, Intel or NVIDIA) is temporarily unreachable — failing closed, contract NOT sent. Try again shortly.',
+  ATTESTATION_UNAVAILABLE: "We couldn't reach one of the attestation sources (NEAR, Intel or NVIDIA), so we stopped. Contract not sent. Please try again shortly.",
   NEAR_AUTH: 'The demo backend is temporarily unavailable. Try again later.',
   INFERENCE_FAILED: 'The model request failed. Try again shortly.',
   INTERNAL: 'Internal error',
@@ -133,7 +133,7 @@ export function makeLimiter(l) {
     check(ip, kind) {
       const t = l.now(); const d = new Date(t).toISOString().slice(0, 10);
       if (d !== day) { day = d; daily = 0; }
-      if (!UNCOUNTED.has(kind) && daily >= l.daily) throw rateError('Hosted demo daily capacity reached — try again tomorrow.', Math.ceil((Date.parse(d) + 86400000 - t) / 1000));
+      if (!UNCOUNTED.has(kind) && daily >= l.daily) throw rateError('The hosted demo has reached its daily limit. Please try again tomorrow.', Math.ceil((Date.parse(d) + 86400000 - t) / 1000));
       const key = `${ip}|${kind}`;
       const arr = (hits.get(key) || []).filter((x) => t - x < l.window);
       if (arr.length >= l[kind]) throw rateError(`Rate limit: at most ${l[kind]} ${{ ask: 'follow-ups', quote: 'server attestations', attest: 'attestation checks' }[kind] || 'analyses'} per ${Math.round(l.window / MIN)} minutes per visitor.`, Math.ceil((arr[0] + l.window - t) / 1000));
@@ -170,7 +170,7 @@ export function createHandler({ mode = 'live', host = '127.0.0.1', hostedDemo = 
   const sampleTexts = () => new Set(samples().map((x) => x.text.trim()));
   const hostedGate = (req, text, kind) => {
     if (!hostedDemo) return;
-    if (!sampleTexts().has(text)) throw new AppError('Hosted demo accepts the bundled fictional samples only — run locally for real contracts', { status: 403, code: 'SAMPLES_ONLY', stage: 'input' });
+    if (!sampleTexts().has(text)) throw new AppError('The hosted demo accepts the bundled fictional samples only. Run SafeRedline locally for real contracts.', { status: 403, code: 'SAMPLES_ONLY', stage: 'input' });
     limiter.check(clientIp(req), kind);
   };
 
@@ -304,10 +304,10 @@ export function startServer({ mode = 'live' } = {}) {
     const { port } = server.address();
     console.log(`\n  SafeRedline running → http://${HOST}:${port}`);
     if (mode === 'twin') {
-      console.log(`  TWIN MODE (script: ${process.env.TWIN_SCRIPT || 'ok'}): simulated NEAR, recorded real attestation — NOT a real TEE`);
+      console.log(`  Twin mode (script: ${process.env.TWIN_SCRIPT || 'ok'}): simulated NEAR, recorded real attestation. Not a real TEE.`);
     } else {
       console.log(`  Model: ${cfg.model} (NEAR AI Cloud, Confidential TEE)`);
-      console.log(`  API key: ${keyConfigured() ? 'configured' : 'NOT CONFIGURED (empty, placeholder, or not an sk- key) — set NEAR_API_KEY in .env; analysis will return NO_API_KEY'}`);
+      console.log(`  API key: ${keyConfigured() ? 'configured' : 'not configured (empty, placeholder, or not an sk- key). Set NEAR_API_KEY in .env; analysis will return NO_API_KEY'}`);
     }
     if (hostedDemo) console.log('  HOSTED DEMO: bundled fictional samples only; per-IP + daily rate limits (in memory)');
     console.log('  Persistence: none (no disk, no DB, no content logging)\n');
