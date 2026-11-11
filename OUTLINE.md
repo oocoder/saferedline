@@ -14,7 +14,7 @@ sections: Summary, System diagram, Status, Open items, Pointers
 
 Local contract/NDA reviewer. A Node HTTP server (127.0.0.1, no dependencies beyond `ethers` and `@phala/dcap-qvl`) serves a single-file UI. For each analysis it generates a fresh nonce, fetches and verifies NEAR AI Cloud gateway and model attestations (Intel TDX, NVIDIA GPU CC), and only then sends the contract to `z-ai/glm-5.3-flash`. The enclave's response signature is verified against the attested key. Nothing is persisted. An offline twin of the NEAR API and a recorded real attestation fixture make `npm test` and `npm run twin` work without network or key.
 
-Honest limits: TLS not bound to the enclave, compose hash not pinned, our server not attested, NRAS JWT trusted via TLS. See [README.md](README.md) and [docs/threat-model.md](docs/threat-model.md).
+Honest limits: TLS not bound to the enclave, compose hash not pinned, our server not attested. See [README.md](README.md) and [docs/threat-model.md](docs/threat-model.md).
 
 ## System diagram
 

@@ -75,7 +75,7 @@ Run per request, in this order, before and after the contract is sent. Any faile
 | `rtmr3`: RTMR3 runtime event-log replay matches the quote | The runtime events are the ones extended into the measured register. |
 | `compose_event`: the `compose-hash` runtime event equals `sha256(app_compose)` | The measured event log and the manifest agree. |
 | `compose_pinned` (only if `EXPECTED_COMPOSE_HASH` is set) | The enclave software matches a hash you chose to trust. |
-| `gpu_nonce` and `gpu`: NVIDIA evidence carries our nonce and NVIDIA NRAS reports the GPUs in confidential-computing mode | The GPU that sees plaintext is a genuine confidential-computing GPU, fresh for this request. |
+| `gpu_nonce` and `gpu`: NVIDIA evidence carries our nonce; NVIDIA NRAS tokens (overall and per-GPU) are verified with ES384 against NVIDIA's JWKS, with `eat_nonce` and `exp` checked and at least one GPU, and report confidential-computing mode | The GPU that sees plaintext is a genuine confidential-computing GPU, fresh for this request. |
 | `gateway_present`, `model_present` | Both enclaves that see plaintext were actually attested. |
 
 **After the response returns:**
@@ -84,6 +84,7 @@ Run per request, in this order, before and after the contract is sent. Any faile
 |---|---|
 | `sig_req`: signed request hash equals sha256 of the exact bytes we sent | The enclave saw our request, unmodified. |
 | `sig_res`: signed response hash equals sha256 of the exact bytes received | The answer was not altered in transit. |
+| `measurement_pinning` (informational, not counted in `verified`) | Shows whether a known-good compose hash is pinned via `EXPECTED_COMPOSE_HASH`; off by default. |
 | `sig_algo`: signature algorithm is ECDSA | No algorithm downgrade. |
 | `sig_ecdsa`: EIP-191 signature recovers to the signing address | The signature is valid. |
 | `sig_attested`: recovered address is in the set of keys attested above | The answer came from the attested enclave, not some other key. |
@@ -101,7 +102,6 @@ The authoritative check list is whatever `GET /api/attest` returns (22 checks li
 - **TLS is not bound to the enclave.** The attestation report is requested with `include_tls_fingerprint=false`. We do not prove the TLS endpoint we sent plaintext to is the attested gateway; a front proxy or load balancer before the TEE is trusted only via ordinary WebPKI. The response signature gives integrity after the fact, not confidentiality.
 - **Enclave software is identified by hash, not audited.** We show the compose hash but do not pin it to a known-good NEAR release or verify that image digests serve the claimed weights. "No retention inside NEAR" rests on the attested compose being what NEAR publishes.
 - **SafeRedline's own server is not attested.** It is not in a TEE and sees plaintext. "Zero retention" on our side is a code-level claim you can verify by reading the code, not a hardware-attested one. OS swap and core dumps are out of scope.
-- **NVIDIA NRAS verdict is trusted via TLS (JWT signature not verified).** We decode the NRAS JWT claims but do not verify its signature against NVIDIA's JWKS yet.
 - **Intel TCB status may be `OutOfDate`/`SWHardeningNeeded`.** Our TCB policy matches NEAR's reference verifier, which accepts these, and the status is shown in the UI; they mean a genuine quote on a platform behind Intel's latest advisories.
 - **A relay in front of NEAR could see plaintext while verification still passes.** There is no TLS channel binding (see the first item). Planned fix: request `include_tls_fingerprint` and compare it to the live certificate, or end-to-end encrypt to the attested key.
 - **Measurement pinning is optional.** Setting `EXPECTED_COMPOSE_HASH` pins the code hash; otherwise we verify the enclave is genuine and which code hash it runs, not that the hash is a NEAR-published release. Planned fix: ship a pinned list of known-good releases.
@@ -123,7 +123,22 @@ Contract text and model output live only in local variables for the duration of 
 - Response-signature verification (after inference): [`src/attest.mjs#L297`](src/attest.mjs#L297)
 - Attestation verifier entry points: [`verifyOne` `src/attest.mjs#L155`](src/attest.mjs#L155), [`attestModel` `#L241`](src/attest.mjs#L241); the module performs no disk writes or content logging.
 - Test that proves it: a sentinel string `ZXQ-SECRET-7731` is analyzed and asserted absent from logs, error bodies and filesystem writes: [`tests/pipeline.test.mjs#L193`](tests/pipeline.test.mjs#L193)
+- Local CSRF protection: Host/Origin allowlist (`ALLOWED_HOSTS` adds extra hosts) and JSON-only POST, so another web page cannot make your browser post to your local server: see [`src/server.mjs`](src/server.mjs) (line link added at final sync).
 - Browser: no `localStorage` of contract text; PDFs are parsed in the browser and only extracted text is sent.
+
+## Configuration
+
+Set in `.env` or the environment (see `.env.example`). Only `NEAR_API_KEY` is required for live mode.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `NEAR_API_KEY` | none | NEAR AI Cloud key (`sk-...`); not needed for twin or `--attest-only` |
+| `NEAR_MODEL` | `z-ai/glm-5.3-flash` | Any Confidential TEE model (`owned_by=nearai`) |
+| `HOST` | `127.0.0.1` | Bind address; keep local to preserve the privacy story |
+| `PORT` | `3000` | Listen port |
+| `ALLOWED_HOSTS` | none | Extra Host header values accepted by the local server (CSRF/DNS-rebinding guard) |
+| `EXPECTED_COMPOSE_HASH` | unset | If set, the attested compose hash must equal it (`compose_pinned` check) |
+| `ALLOW_ENDPOINT_OVERRIDE` | unset | Required (`1`) to redirect NEAR/Intel/NVIDIA endpoints via env; the server refuses otherwise, and `/api/health` shows a warning when active. Development only |
 
 ## Architecture
 
@@ -168,7 +183,7 @@ How we frame the product, not a measured comparison. Sources and caveats: [docs/
 
 ## Roadmap (not built)
 
-Hosted demo; running SafeRedline itself in a TEE (dstack CVM) to close the "our server sees plaintext" gap; TLS fingerprint binding and per-GPU NVIDIA JWT checks (both recommended by NEAR's near-ai-cloud skill; in progress); pinning the compose hash to a known NEAR release; batch review.
+Hosted demo; running SafeRedline itself in a TEE (dstack CVM) to close the "our server sees plaintext" gap; TLS fingerprint binding (recommended by NEAR's near-ai-cloud skill; in progress, informational only for now); pinning the compose hash to a known NEAR release; batch review.
 
 ## Project layout
 

@@ -13,7 +13,7 @@
 
 ## Proven
 
-Before the contract leaves the machine: gateway and every model instance are genuine Intel TDX with accepted TCB and debug off; the quote binds a fresh nonce (live, not replayed) and the enclave signing key; the compose hash is in MRCONFIGID and RTMR3 replays; NVIDIA NRAS says the GPUs are in CC mode against the same nonce.
+Before the contract leaves the machine: gateway and every model instance are genuine Intel TDX with accepted TCB and debug off; the quote binds a fresh nonce (live, not replayed) and the enclave signing key; the compose hash is in MRCONFIGID and RTMR3 replays; NVIDIA NRAS says the GPUs are in CC mode against the same nonce (ES384 JWT signature verified against NVIDIA's JWKS; `eat_nonce` and `exp` checked on overall and per-GPU tokens; at least one GPU).
 After the response: exact request and response bytes were signed (EIP-191) by a key attested above, so the output came from that enclave and was not modified in transit.
 
 ## Not proven
@@ -21,8 +21,7 @@ After the response: exact request and response bytes were signed (EIP-191) by a 
 1. **Transport binding.** `include_tls_fingerprint=false`. Plaintext goes over ordinary TLS; nothing proves the endpoint is the attested gateway. Signature check gives integrity after the fact, not confidentiality. Planned: SPKI fingerprint comparison as an informational check.
 2. **Enclave code behavior.** Compose hash is displayed, not pinned to a known-good release; image digests vs claimed weights not checked.
 3. **Our server.** Not in a TEE. Zero retention is a code-level claim (no fs writes, DB, content logs). Swap and core dumps are out of scope.
-4. **NRAS JWT.** Claims decoded, signature not verified against NVIDIA JWKS; verdict trusted via TLS.
-5. **Model correctness.** Output may be wrong; `quoteFound` is only a verbatim-quote guard.
+4. **Model correctness.** Output may be wrong; `quoteFound` is only a verbatim-quote guard.
 
 ## Deferred limits (from independent review)
 
@@ -37,7 +36,7 @@ An independent adversarial review found no way to produce `verified: true` from 
 
 Tested: fail-open paths (missing quote body, compose, gateway, signer, malformed NRAS); that test seams (`deps`, twin) are unreachable from HTTP requests; the sentinel test showing contract text never reaches logs, error bodies or fs writes.
 
-Being hardened now: strict signature model and algorithm checks, exact signer-address length, NVIDIA GPU count, nonce and expiry checks, a lock on endpoint overrides, and local CSRF and Host-header checks.
+Hardening done: strict signature model and algorithm checks, exact signer-address length, NVIDIA JWT verification with GPU count, nonce and expiry checks, a lock on endpoint overrides (`ALLOW_ENDPOINT_OVERRIDE`), and local CSRF protection (Host/Origin allowlist, JSON-only POST). In progress: TLS binding (currently an informational `tls_bound` check).
 
 ## Fail-closed design
 

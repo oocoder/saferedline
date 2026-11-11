@@ -7,6 +7,7 @@ Contract copied from plan section 4 ([plan](plans/2026-11-11-architecture-plan.m
 
 ```ts
 Check = { id: string, label: string, pass: boolean, detail?: string,
+          informational?: boolean, // informational checks are shown but excluded from `verified`
           scope: 'gateway' | 'model' | 'gpu' | 'signature' | 'info' }
 
 Attestation = {
@@ -52,6 +53,8 @@ Analysis = { overall_risk: 'High' | 'Medium' | 'Low' | 'Unknown', executive_summ
 | `NEAR_AUTH` | 502 | true |
 | `INFERENCE_FAILED` | 502 | true |
 | `INFERENCE_TIMEOUT` | 504 | true |
+| `UNSUPPORTED_MEDIA_TYPE` (POST without `Content-Type: application/json`; stage `input`) | 415 | false |
+| `BAD_ORIGIN` (Host or Origin not on the local allowlist; stage `input`) | 403 | false |
 | `NOT_FOUND` | 404 | false |
 | `INTERNAL` | 500 | unknown, reported as false only if before the send |
 
@@ -59,7 +62,7 @@ A signature failure is **not** an error. It returns 200 with `verified: false`.
 
 **Endpoints:**
 
-- **`GET /api/health`** → `{ ok: true, model: string, apiKeyConfigured: boolean, mode: 'live' | 'twin', persistence: 'none', bind: string, version: string }`
+- **`GET /api/health`** → `{ ok: true, model: string, apiKeyConfigured: boolean, mode: 'live' | 'twin', persistence: 'none', bind: string, version: string, warnings: string[] }`. `warnings` is non-empty when an endpoint override is active.
 - **`GET /api/samples`** → `[{ id: 'sample_predatory_nda', title: 'Predatory SaaS NDA', riskHint: 'High', text: string }, ...]`. Ordered predatory, balanced, contractor.
 - **`GET /api/attest`** → `200 Attestation`. Returned even when `verified` is false; the UI shows the red checks. Needs no key. `503 ATTESTATION_UNAVAILABLE` only when the report itself can't be fetched.
 - **`POST /api/analyze`**
