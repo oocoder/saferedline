@@ -1,0 +1,17 @@
+INDEPENDENT CONTRACTOR SERVICES AGREEMENT
+
+This Independent Contractor Services Agreement ("Agreement") is made on November 11, 2026, between Northwind Ventures Corp. ("Client") and Jordan Rivera, an individual ("Contractor"). All names and terms in this document are fictional.
+
+1. Services. Contractor shall provide software development services as requested by Client from time to time, including any additional services Client deems reasonably related.
+
+2. Payment. Client shall pay Contractor $95 per hour, net ninety (90) days after Client's acceptance of each invoice. Client may withhold payment for any deliverable it determines, in its sole discretion, to be unsatisfactory.
+
+3. Intellectual Property. All work product, inventions, and know-how created by Contractor during the term of this Agreement, whether or not related to the Services and whether or not created using Client resources, shall be the exclusive property of Client.
+
+4. Non-Competition. For a period of five (5) years following termination, Contractor shall not provide software development services to any business anywhere in the world.
+
+5. Termination. Client may terminate this Agreement at any time without notice. Contractor may terminate this Agreement upon one hundred eighty (180) days' written notice.
+
+6. Liability. Contractor's liability under this Agreement shall be unlimited. Client's total liability shall not exceed one hundred dollars ($100).
+
+7. Automatic Renewal. This Agreement automatically renews for successive one-year terms unless Contractor provides notice of non-renewal no earlier than 190 days and no later than 180 days before the end of the then-current term.

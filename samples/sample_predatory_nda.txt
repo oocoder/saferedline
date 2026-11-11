@@ -1,0 +1,13 @@
+MUTUAL NON-DISCLOSURE AND EVALUATION AGREEMENT
+
+This Agreement is entered into as of November 11, 2026, by and between Apex Global Holdings Inc. ("Company") and Counterparty ("Recipient").
+
+1. Confidential Information. "Confidential Information" means any information disclosed by Company to Recipient. Information disclosed by Recipient to Company shall NOT be deemed Confidential Information unless expressly agreed in an amendment signed by Company's CEO.
+
+2. Perpetual Term. Recipient's obligations of confidentiality under this Agreement shall survive in perpetuity, including with respect to information that becomes publicly known through no fault of Recipient.
+
+3. Feedback & IP Assignment. Any ideas, suggestions, feedback, or derivative concepts shared by Recipient during discussions shall automatically become the sole and exclusive property of Company, and Recipient hereby irrevocably assigns all right, title, and interest therein to Company without compensation.
+
+4. Uncapped Indemnification. Recipient shall indemnify, defend, and hold harmless Company against any and all claims, damages, losses, and attorney fees arising out of or relating to this Agreement, with no cap on liability.
+
+5. Governing Law & Venue. This Agreement shall be governed by the laws of the Cayman Islands, and any disputes shall be resolved exclusively in courts located in George Town, Cayman Islands.
