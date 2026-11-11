@@ -79,7 +79,9 @@ for (const s of samples) {
   if (ok) {
     await step(scope, 'verified badge', async () => {
       const t = await page.textContent('#vbadge');
-      assert(/Hardware TEE verified/.test(t), 'badge: ' + t.slice(0, 60));
+      assert(live ? /Hardware TEE verified/.test(t) : /Verified against RECORDED/.test(t), 'badge: ' + t.slice(0, 60));
+      const atk = await page.locator('#attacks').isVisible();
+      assert(live ? !atk : atk, live ? 'attack row visible in live mode' : 'attack row missing in twin mode');
     });
     await step(scope, 'risk badge', async () => {
       const t = (await page.textContent('.risk')).trim();
@@ -116,7 +118,7 @@ for (const s of samples) {
       await page.waitForFunction(() => document.getElementById('ask-out').textContent.trim().length > 0 || document.getElementById('ask-err').textContent.trim().length > 0, null, { timeout: REPORT_TIMEOUT });
       const err = (await page.textContent('#ask-err')).trim(); assert(!err, 'ask error: ' + err.slice(0, 100));
       assert(!/UNVERIFIED/.test(await page.textContent('#ask-out')), 'unverified answer');
-      assert(/Hardware TEE verified/.test(await page.textContent('#vbadge')), 'badge not verified after ask');
+      assert(/Hardware TEE verified|Verified against RECORDED/.test(await page.textContent('#vbadge')), 'badge not verified after ask');
     });
   }
   await step(scope, 'no console errors / CSP violations', async () => { assert(!problems.length, problems.join(' | ')); });
@@ -129,8 +131,8 @@ for (const s of samples) {
   await page.goto(BASE + '/');
   const nonce = async () => {
     await page.click('#verifyonly');
-    await page.waitForFunction(() => /Enclave verified|UNVERIFIED/.test(document.getElementById('vbadge').textContent), null, { timeout: 60000 });
-    assert(/Enclave verified/.test(await page.textContent('#vbadge')), 'not verified');
+    await page.waitForFunction(() => /^vbadge (ok|warn|bad)/.test(document.getElementById('vbadge').className), null, { timeout: 60000 });
+    assert(/\bok\b/.test(await page.getAttribute('#vbadge', 'class')), 'not verified: ' + (await page.textContent('#vbadge')).slice(0, 60));
     const h = page.locator('#tbody .kv dd', { has: page.locator('.hash') }).first().locator('.hash');
     await h.click(); // expand to the full nonce
     return (await h.textContent()).trim();
