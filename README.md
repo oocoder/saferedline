@@ -6,7 +6,7 @@ Built at NEAR HACKATHON (Build City x NEAR Legion, NYC), Nov 11 2026. Track: Pri
 
 ## The problem
 
-An NDA or term sheet is the document you cannot paste into a normal chatbot: it is confidential, often under NDA itself, and a standard LLM API gives you no proof of where the text went or whether it was kept. People either skip AI review or leak the document.
+An NDA or term sheet is the document you cannot paste into a normal chatbot: it is confidential, often under NDA itself, and a standard LLM API gives you no proof of where the text went or whether it was kept. People either skip AI review or leak the document. Context: Cyberhaven's 2025 report (vendor telemetry, not peer-reviewed) puts 34.8% of corporate data employees enter into AI tools at "sensitive"; in 2023 Samsung engineers pasted proprietary code into ChatGPT and the company banned internal use. Sources: [docs/judge-qa-research.md](docs/judge-qa-research.md).
 
 ## Who it is for
 
@@ -102,7 +102,10 @@ The authoritative check list is whatever `GET /api/attest` returns (22 checks li
 - **Enclave software is identified by hash, not audited.** We show the compose hash but do not pin it to a known-good NEAR release or verify that image digests serve the claimed weights. "No retention inside NEAR" rests on the attested compose being what NEAR publishes.
 - **SafeRedline's own server is not attested.** It is not in a TEE and sees plaintext. "Zero retention" on our side is a code-level claim you can verify by reading the code, not a hardware-attested one. OS swap and core dumps are out of scope.
 - **NVIDIA NRAS verdict is trusted via TLS (JWT signature not verified).** We decode the NRAS JWT claims but do not verify its signature against NVIDIA's JWKS yet.
-- **Intel TCB status may be `OutOfDate`/`SWHardeningNeeded`.** These are accepted (same policy as NEAR's reference verifier) and shown in the panel; they mean a genuine quote on a platform behind Intel's latest advisories.
+- **Intel TCB status may be `OutOfDate`/`SWHardeningNeeded`.** Our TCB policy matches NEAR's reference verifier, which accepts these, and the status is shown in the UI; they mean a genuine quote on a platform behind Intel's latest advisories.
+- **A relay in front of NEAR could see plaintext while verification still passes.** There is no TLS channel binding (see the first item). Planned fix: request `include_tls_fingerprint` and compare it to the live certificate, or end-to-end encrypt to the attested key.
+- **Measurement pinning is optional.** Setting `EXPECTED_COMPOSE_HASH` pins the code hash; otherwise we verify the enclave is genuine and which code hash it runs, not that the hash is a NEAR-published release. Planned fix: ship a pinned list of known-good releases.
+- **Responses carry no per-request nonce.** Replay of a response only matters to a party that already holds the plaintext, so we treat it as out of scope; the attestation itself is nonce-bound.
 - Model output is untrusted text and can be wrong or hallucinated; `quoteFound` flags clauses whose quote is not verbatim in your contract. This is informational analysis, not legal advice.
 
 Details: [docs/threat-model.md](docs/threat-model.md).
@@ -156,15 +159,16 @@ More: [docs/architecture.md](docs/architecture.md).
 
 ## Positioning (not a verified benchmark)
 
-This is how we frame the product, not a measured comparison.
+How we frame the product, not a measured comparison. Sources and caveats: [docs/judge-qa-research.md](docs/judge-qa-research.md).
 
-- **Word / Google Docs:** formatting and Track Changes tools; they do not analyze a contract for hidden traps or draft replacement language.
-- **Microsoft Copilot / Google Gemini:** general assistants whose data handling rests on provider terms and admin trust. SafeRedline's difference is that the enclave claim is checkable by the user per request (with the limits listed above).
-- **Harvey and similar legal AI:** aimed at large firms with enterprise sales cycles and standard cloud compliance. SafeRedline targets founders, small businesses and boutique teams that want self-serve review. We make no pricing comparison here.
+- **Word / Google Docs:** formatting and Track Changes tools; they do not analyze a contract for traps or draft replacement language.
+- **Microsoft Copilot / Gemini for Workspace:** privacy rests on contractual commitments; neither offers a customer-verifiable, per-request TEE attestation for these SaaS products.
+- **Harvey:** enterprise, sales-led, annual multi-seat contracts. We make no pricing comparison.
+- **SMB contract-review tools (Spellbook, LegalOn, GC AI):** compete on contractual zero data retention with LLM providers; none claims TEEs or verifiable attestation. In one line: they promise zero retention; we prove where it ran (within the limits above).
 
 ## Roadmap (not built)
 
-Hosted demo; running SafeRedline itself in a TEE (dstack CVM) to close the "our server sees plaintext" gap; TLS fingerprint binding; NRAS JWT verification; pinning the compose hash to a known NEAR release; batch review.
+Hosted demo; running SafeRedline itself in a TEE (dstack CVM) to close the "our server sees plaintext" gap; TLS fingerprint binding and per-GPU NVIDIA JWT checks (both recommended by NEAR's near-ai-cloud skill; in progress); pinning the compose hash to a known NEAR release; batch review.
 
 ## Project layout
 
