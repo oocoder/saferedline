@@ -30,8 +30,8 @@ const { getCollateral, verify: dcapVerify, PHALA_PCCS_URL, INTEL_PCS_URL } = dca
 // Endpoint overrides redirect where attestation evidence / plaintext goes: refuse unless explicitly allowed.
 const OVERRIDE_VARS = ['NEAR_BASE_URL', 'NRAS_URL', 'NRAS_JWKS_URL', 'PCCS_URL'];
 export const endpointOverrides = process.env.SAFEREDLINE_TWIN ? [] : OVERRIDE_VARS.filter((k) => process.env[k]);
-if (endpointOverrides.length && process.env.ALLOW_ENDPOINT_OVERRIDE !== '1') {
-  throw new Error(`Refusing endpoint override(s) ${endpointOverrides.join(', ')}: they redirect attestation and contract traffic. Set ALLOW_ENDPOINT_OVERRIDE=1 to allow (development only).`);
+if (endpointOverrides.length && (process.env.ALLOW_ENDPOINT_OVERRIDE !== '1' || process.env.VERCEL)) {
+  throw new Error(`Refusing endpoint override(s) ${endpointOverrides.join(', ')}: they redirect attestation and contract traffic. Set ALLOW_ENDPOINT_OVERRIDE=1 to allow (development only; never honoured on Vercel).`);
 }
 
 // Injectable seams (tests / twin). Everything networked or time-dependent goes through here.
@@ -43,6 +43,8 @@ export const deps = {
   pccsUrl: process.env.PCCS_URL || PHALA_PCCS_URL,
   fallbackPccsUrl: INTEL_PCS_URL,
   evidence: 'live', // 'recorded' when the twin replays a recorded attestation (set by tests/twin/install.mjs)
+  jwksTtlMs: 60 * 60 * 1000,        // NVIDIA JWKS cache (0 = off)
+  collateralCacheMs: 10 * 60 * 1000, // Intel collateral cache per PCK certificate chain (0 = off)
   tlsOptions: {}, // extra node:https options for pinned requests (tests: custom CA)
   getCollateral,
   // SPKI sha256 (hex) of the TLS certificate the gateway host presents to us right now.
@@ -211,31 +213,65 @@ export function gpuClaimProblems(c) {
   return bad;
 }
 
-const nrasFetch = async (url, opts, what) => {
-  try { return await fetchJson(url, opts, deps.timeouts.nras); } catch (e) {
+const nrasFetch = async (url, opts, what, timeout = deps.timeouts.nras) => {
+  try { return await fetchJson(url, opts, timeout); } catch (e) {
     if (what === 'attest' && e instanceof HttpError && e.status > 0 && e.status < 500) throw new Error(`NVIDIA NRAS rejected the evidence (${e.message}) — failing closed`);
     const err = new Error('NVIDIA NRAS unreachable — failing closed'); err.unavailable = 'NVIDIA NRAS'; throw err;
   }
 };
 
+const jwksCache = { url: '', at: 0, value: null };
+async function getJwks(refresh = false) {
+  const ttl = deps.jwksTtlMs;
+  if (!refresh && ttl > 0 && jwksCache.value && jwksCache.url === deps.jwksUrl && Date.now() - jwksCache.at < ttl) return { jwks: jwksCache.value, cached: true };
+  const jwks = await nrasFetch(deps.jwksUrl, {}, 'jwks', deps.timeouts.jwks ?? deps.timeouts.nras);
+  if (ttl > 0) Object.assign(jwksCache, { url: deps.jwksUrl, at: Date.now(), value: jwks });
+  return { jwks, cached: false };
+}
+
 async function verifyNvidia(nvidiaPayload, nonce) {
   const payload = typeof nvidiaPayload === 'string' ? JSON.parse(nvidiaPayload) : nvidiaPayload;
   const nonceOk = String(payload.nonce || '').toLowerCase() === nonce.toLowerCase();
   const body = await nrasFetch(deps.nrasUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }, 'attest');
-  const jwks = await nrasFetch(deps.jwksUrl, {}, 'jwks');
+  const { jwks, cached } = await getJwks();
   let overall, perGpu;
   try { overall = body[0][1]; perGpu = Object.values(body[1] || {}); } catch { throw new Error(NRAS_UNEXPECTED); }
   if (typeof overall !== 'string' || !perGpu.length || !perGpu.every((t) => typeof t === 'string')) throw new Error(NRAS_UNEXPECTED);
   // The overall verdict and every per-GPU token must carry NVIDIA's signature, our nonce, and be unexpired.
-  const claims = verifyJwt(overall, jwks, nonce);
-  for (const t of perGpu) {
-    const bad = gpuClaimProblems(verifyJwt(t, jwks, nonce));
-    if (bad.length) throw new Error(`NVIDIA GPU token claims failed (${bad.join(', ')}) — failing closed`);
+  const verifyAll = (keys) => {
+    const c = verifyJwt(overall, keys, nonce);
+    for (const t of perGpu) {
+      const bad = gpuClaimProblems(verifyJwt(t, keys, nonce));
+      if (bad.length) throw new Error(`NVIDIA GPU token claims failed (${bad.join(', ')}) — failing closed`);
+    }
+    return c;
+  };
+  let claims;
+  try { claims = verifyAll(jwks); } catch (e) {
+    if (!cached || !/unknown key/.test(e.message)) throw e;   // key rotated since we cached the JWKS: refetch once
+    claims = verifyAll((await getJwks(true)).jwks);
   }
   return { nonceOk, verdict: claims['x-nvidia-overall-att-result'] === true, gpus: perGpu.length, arch: payload.arch };
 }
 
+const collateralCache = new Map();
+// Quotes from the same machine embed the same PCK certificate chain -> same FMSPC/CA -> same collateral.
+function pckKey(quote) {
+  const t = quote.toString('latin1');
+  const i = t.indexOf('-----BEGIN CERTIFICATE-----'); const j = t.lastIndexOf('-----END CERTIFICATE-----');
+  return i >= 0 && j > i ? sha256hex(Buffer.from(t.slice(i, j))) : null;
+}
+
 async function collateralFor(quote) {
+  const ttl = deps.collateralCacheMs;
+  const key = ttl > 0 ? pckKey(quote) : null;
+  if (key) { const hit = collateralCache.get(key); if (hit && Date.now() - hit.at < ttl) return hit.promise; }
+  const p = fetchCollateral(quote);
+  if (key) { collateralCache.set(key, { at: Date.now(), promise: p }); p.catch(() => collateralCache.delete(key)); } // failures are never cached
+  return p;
+}
+
+async function fetchCollateral(quote) {
   try {
     return await withTimeout(deps.getCollateral(deps.pccsUrl, quote), deps.timeouts.pccs, 'timeout');
   } catch (e1) {
@@ -342,6 +378,51 @@ export async function verifyOne(att, nonce, { gpu = false, scope = 'model' } = {
 
   return {
     checks, unavailable, tcbStatus, gpuCount, composeHash,
+    measurement: td ? { mrtd: toHex(td.mrTd), rtmr3: toHex(td.rtMr3), mrConfigId: toHex(td.mrConfigId) } : null,
+  };
+}
+
+/**
+ * Verify a dstack CVM quote (SafeRedline's own server). Same primitives as verifyOne: Intel root of trust via dcap-qvl,
+ * debug off, report_data binding, sha256(app_compose) in MRCONFIGID, RTMR3 replay. `expectedReportData32` is the 32-byte
+ * digest the quote must carry in report_data[0..32] (see reportDataFor in dstack.mjs).
+ */
+export async function verifyServerQuote({ quote, expectedReportData32, eventLog, appCompose }) {
+  const checks = []; const unavailable = [];
+  const C = (id, label, pass, detail, extra) => checks.push(check(id, 'server', label, pass, detail, extra));
+  let td = null, tcbStatus = null;
+  try {
+    const q = Buffer.from(strip0x(quote), 'hex');
+    const collateral = await collateralFor(q);
+    const result = dcapVerify(q, collateral, deps.nowSec());
+    td = result.report?.asTd10?.() || null; tcbStatus = result.status;
+    C('tdx_quote', 'Intel TDX quote signature valid (Intel root of trust)', ACCEPTED_TCB.has(tcbStatus), `TCB status: ${tcbStatus}`, { tcbStatus });
+  } catch (e) {
+    if (e.unavailable) unavailable.push(e.unavailable);
+    C('tdx_quote', 'Intel TDX quote signature valid (Intel root of trust)', false, e.unavailable ? e.message : `quote rejected: ${String(e.message).slice(0, 160)}`);
+  }
+  if (!td?.reportData) {
+    C('td_parse', 'Quote body is a TD report with report data', false, 'quote body not TD10 (or quote not verified)');
+  } else {
+    C('td_parse', 'Quote body is a TD report with report data', true, 'TD10');
+    C('tdx_debug', 'TDX debug mode disabled', (td.tdAttributes[0] & 1) === 0, `td_attributes[0]=0x${td.tdAttributes[0].toString(16).padStart(2, '0')}`);
+    const rd = Buffer.from(td.reportData);
+    C('rd_binding', 'Quote binds OUR fresh nonce (report_data = sha256(prefix + nonce))', Buffer.isBuffer(expectedReportData32) && expectedReportData32.length === 32 && rd.subarray(0, 32).equals(expectedReportData32), rd.subarray(0, 32).toString('hex'));
+  }
+  const composeHash = typeof appCompose === 'string' ? sha256hex(Buffer.from(appCompose, 'utf8')) : null;
+  if (composeHash) C('compose', 'App code (docker compose) hash bound in MRCONFIGID', !!td?.mrConfigId && toHex(td.mrConfigId) === '01' + composeHash + '00'.repeat(15), composeHash, { composeHash });
+  else checks.push({ ...check('compose', 'server', 'App code (docker compose) hash bound in MRCONFIGID', false, 'server did not return app_compose (not verifiable)'), informational: true });
+  let rt = null;
+  if (eventLog) {
+    try {
+      rt = replayRtmr3(parseEvents(eventLog));
+      C('rtmr3', 'RTMR3 event-log replay matches quote', !!td && rt.rtmr3 === toHex(td.rtMr3), `${rt.count} runtime events · ${rt.rtmr3.slice(0, 16)}…`);
+      const ev = rt.events.find((e) => e.imr === 3 && e.event === 'compose-hash');
+      if (composeHash) C('compose_event', 'Runtime compose-hash event agrees with app_compose', !!ev && strip0x(ev.event_payload) === composeHash, ev ? strip0x(ev.event_payload).slice(0, 16) + '…' : 'no compose-hash event');
+    } catch (e) { C('rtmr3', 'RTMR3 event-log replay matches quote', false, e.message); }
+  } else checks.push({ ...check('rtmr3', 'server', 'RTMR3 event-log replay matches quote', false, 'server did not return event_log'), informational: true });
+  return {
+    verified: checks.filter((c) => !c.informational).every((c) => c.pass), checks, unavailable, tcbStatus, composeHash,
     measurement: td ? { mrtd: toHex(td.mrTd), rtmr3: toHex(td.rtMr3), mrConfigId: toHex(td.mrConfigId) } : null,
   };
 }

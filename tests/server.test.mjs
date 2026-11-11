@@ -48,13 +48,17 @@ describe('HTTP surface', () => {
   });
   test('HEAD works for GET routes (no body)', async () => {
     env = await boot();
-    for (const p of ['/', '/api/health', '/api/samples']) {
+    for (const p of ['/', '/api/health']) {
       const res = await fetch(env.base + p, { method: 'HEAD' });
       assert.equal(res.status, 200, p);
       assert.equal(await res.text(), '');
       assert.match(res.headers.get('cache-control'), /no-store/);
     }
-    assert.equal((await fetch(env.base + '/api/analyze', { method: 'HEAD' })).status, 404);
+    for (const p of ['/api/samples', '/api/analyze', '/api/attest', '/api/nope']) {
+      const r = await fetch(env.base + p, { method: 'HEAD' });
+      assert.equal(r.status, 405, p);
+      assert.equal(r.headers.get('allow'), 'GET, HEAD');
+    }
   });
   test('error envelope: input validation and routing', async () => {
     env = await boot();

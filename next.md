@@ -1,29 +1,30 @@
-# next.md — SafeRedline hackathon build (active project; delete at completion)
+# next.md: SafeRedline active work (delete at completion)
 
-Source of truth: [docs/plans/2026-11-11-architecture-plan.md](docs/plans/2026-11-11-architecture-plan.md) (sections 1-5).
-Goal deadline: **16:15 ET** code freeze buffer (demo 16:30). Global submission: Nov 14 23:59 UTC.
+State at 2:55 PM ET 2026-11-11. Source of truth for any agent picking this up.
 
-## Phase A — parallel implementation (13:10 → 14:45)
-| Eng | Owns (disjoint) | Done when |
-|---|---|---|
-| A backend/tests/twin | `src/**` `scripts/**` `tests/**` `samples/**` `package*.json` `.env.example` `.gitignore` | plan §5-A 1,4-8 green offline; `npm run twin` serves UI by 13:40 |
-| B UI | `public/index.html` | plan §5-B 1-5 against `npm run twin` |
-| C docs | `README.md` `LICENSE` `OUTLINE.md` `AGENTS.md` `CLAUDE.md` `docs/**` (not docs/plans) | plan §5-C 1-5; AGENTS.md ≤60 lines |
+## Done
+- App built, 155+ offline tests, E2E 30/30 (twin + live), 4 AI-judge rounds (last 9/10), gitleaks clean.
+- Public repo: https://github.com/oocoder/saferedline. X post with video: https://x.com/AlexBuildsNY/status/2120597792963883456.
+- Hackathon form SUBMITTED + VERIFIED (API 409). NEVER resubmit; use https://nearhackathon.com/request-changes.
+- Vercel project linked: pensi-work/saferedline (`.vercel/` + `.env.local` gitignored). Sensitive env vars set (production + preview): NEAR_API_KEY, HOSTED_DEMO=1, TRUST_PROXY=1, NODEJS_HELPERS=0.
 
-Engineering loop for every defect: reproduce in twin (red) → fix → green → one live confirm.
+## In progress (uncommitted in working tree)
+- Engineer A: Vercel adapter (createHandler refactor, api/index.mjs, vercel.json with security headers + maxDuration 120, .vercelignore, hosted timeouts, /api/attest limit + cache, HEAD only on / and /api/health, engines 22.x, x-vercel-forwarded-for).
+- Engineer B: hosted-demo UI (blue samples-only banner, read-only input, 429/403 messages). Done, uncommitted.
+- Engineer C: Vercel docs (README "Live demo", threat model). Needs a line-link resync after A (`npm run check:docs`).
 
-## Phase B — integration + live (14:45 → 15:30)
-- [ ] Orchestrator: full `npm test` on quiet machine; `npm run twin` UI walk-through of all twin scripts.
-- [ ] Live with real `sk-` key (user claims at nearbuilders.org/dashboard): `npm run verify`, non-ASCII sample, one UI analyze (plan §5-A 2-3).
-- [ ] Adversarial review of attest.mjs fail-closed gates by independent subagent (Codex out of credits).
+## Deploy runbook (after A reports)
+1. Gate: `npm test` (all green), `npm run check:docs` (0 problems), twin E2E (`PORT=3970 SAFEREDLINE_TWIN=1 node src/server.mjs` + `BASE_URL=http://127.0.0.1:3970 npm run e2e`), `gitleaks git . --config .gitleaks.toml`.
+2. Confirm `.vercelignore` excludes `.env*` (except .env.example), .work, tests, docs. Commit + push (stage named files only; never `git add -A`).
+3. `vercel deploy --prod --yes` → read the production alias → `printf %s <alias> | vercel env add ALLOWED_HOSTS production --force` → redeploy.
+4. Smoke test (architect's list): health mode=hosted-demo; CSP/nosniff/no-store headers on `/`; `/.env`, `/package.json`, `/src/server.mjs` return 404; samples=3; /api/attest verified; analyze sample 0 verified + pinned + signed; non-sample → 403 SAMPLES_ONLY; text/plain → 415; bad Origin → 403; rate limit → 429; JSON 404.
+5. Vercel Firewall: 1 rate-limit rule on POST /api/analyze (dashboard; the user may need to click).
+6. Update README live URL (C), commit, push. pi-swarm judges against the live URL.
 
-## Phase C — judge simulation + docs sync (15:30 → 16:15)
-- [ ] pi-swarm read-only agent: fresh clone → follow README "do X, see Y" as an AI judge; report gaps.
-- [ ] C updates README line links to final code; OUTLINE.md status.
-- [ ] Commit (staged files only), tag `demo-2026-11-11`.
+## Today (user)
+- Demo sign-up (WhatsApp link, closes 4:00 PM). Rehearsal ~3:45 (`npm start` → localhost:3000, `docs/demo-script.md`). Demo 4:30 PM. Fallback: `npm run twin`.
 
-## After demo (by Nov 14)
-- [x] Public repo (github.com/oocoder/saferedline), X post with video, form submitted 2026-11-11 2:33PM ET.
-- [ ] Hosted demo required for judges (Q-012), up until ≥ Nov 18 — stretch: run SafeRedline itself in a TEE (dstack CVM) to close the "server sees plaintext" gap.
-- [x] TLS channel binding + inference pinning (done 13:17)
-- [ ] Stretch: ICM `workspace/` for batch contract review
+## After the hackathon
+- Rotate the NEAR AI key after 2026-11-18. Revoke the unused NEAR Builders "api…" key.
+- Optional: Phala dstack TEE hosting (server attested). ICM batch workspace.
+- Private briefing: ~/projects/saferedline-notes/briefing.md (outside the repo).

@@ -69,6 +69,7 @@ Channel = { tlsPinned: boolean, fingerprint: string | null, note: string }
 | `INFERENCE_TIMEOUT` | 504 | true |
 | `UNSUPPORTED_MEDIA_TYPE` (POST without `Content-Type: application/json`; stage `input`) | 415 | false |
 | `BAD_ORIGIN` (Host or Origin not on the local allowlist; stage `input`) | 403 | false |
+| `METHOD_NOT_ALLOWED` (`HEAD` is allowed only on `/` and `/api/health`; stage `input`) | 405 | false |
 | `NOT_FOUND` | 404 | false |
 | `INTERNAL` | 500 | unknown, reported as false only if before the send |
 
@@ -76,9 +77,10 @@ A signature failure is **not** an error. It returns 200 with `verified: false`.
 
 **Endpoints:**
 
-- **`GET /api/health`** → `{ ok: true, model: string, apiKeyConfigured: boolean, mode: 'live' | 'twin' | 'hosted-demo', persistence: 'none', bind: string, version: string, warnings: string[], twinFakeKey?: boolean }`. `twinFakeKey` is set in twin mode, where the API key is a placeholder. `warnings` is non-empty when an endpoint override is active.
+- **`GET /api/health`** → `{ ok: true, model: string, apiKeyConfigured: boolean, mode: 'live' | 'twin' | 'hosted-demo', persistence: 'none', bind: string, version: string, warnings: string[], twinFakeKey?: boolean, demoBanner?: string, platform?: 'vercel' }`. In hosted-demo mode `demoBanner` carries the "samples only" notice; on Vercel `platform` is `'vercel'` and `bind` is `'vercel'`. `twinFakeKey` is set in twin mode, where the API key is a placeholder. `warnings` is non-empty when an endpoint override is active.
 - **`GET /api/models`** → `[{ id, name, context }]` (in twin mode the entries carry `simulated: true`): Confidential TEE models (`owned_by == "nearai"`) from NEAR's `/v1/models`.
 - **`GET /api/samples`** → `[{ id: 'sample_predatory_nda', title: 'Predatory SaaS NDA', riskHint: 'High', text: string }, ...]`. Ordered predatory, balanced, contractor.
+- **Hosted demo notes:** limits are 3 analyses per IP per 10 minutes and a daily cap of 60 per server instance; in hosted mode `GET /api/attest` is cached for 45 seconds; on Vercel the handler answers with the JSON error envelope at a 100 second deadline, before the 120 second function limit.
 - **`GET /api/attest`** → `200 Attestation`. Returned even when `verified` is false; the UI shows the red checks. Needs no key. `503 ATTESTATION_UNAVAILABLE` only when the report itself can't be fetched.
 - **`POST /api/analyze`**
   - Request: `{ text: string /* 50..512KB chars, trimmed */, source?: 'paste' | 'txt' | 'pdf' | 'sample' }`. `source` is optional metadata; it is never logged.

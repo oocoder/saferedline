@@ -66,6 +66,7 @@ export async function installTwin({ script = {}, apiKey = 'sk-twin-test-key', ti
       if (!c) throw new Error('no recorded collateral for quote');
       return c;
     },
+    jwksTtlMs: 0, collateralCacheMs: 0, // tests must see every injected failure, never a cached success
     evidence: 'recorded', // tls_bound is reported as skipped: the twin speaks plain HTTP
     nowSec: () => fixture.recordedAt,
     newNonce: () => fixture.nonce,

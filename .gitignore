@@ -1,8 +1,10 @@
 .work/
 .env
 .env.*
-!.env.example
 node_modules/
 .DS_Store
 *.log
 agenda-and-idea-worksheet.pdf
+.vercel
+.env*
+!.env.example
