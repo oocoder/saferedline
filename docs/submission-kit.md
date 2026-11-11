@@ -53,7 +53,7 @@ NEAR is load-bearing: NEAR AI Cloud runs the open-weight model in the TEE and ex
 ## Demo video shot list (60 seconds or less)
 
 1. 0-5s: Title text: "An NDA you can't paste into a chatbot." Empty UI.
-2. 5-12s: Click Load Predatory NDA; click Analyze privately; stage labels visible.
+2. 5-12s: Click Predatory SaaS NDA (High); click Analyze privately; stage labels visible.
 3. 12-25s: Clause cards; zoom on IP assignment clause and redline; click Copy.
 4. 25-42s: Verified TEE panel: nonce, checks passing, signature group.
 5. 42-50s: Click Verify enclave only; nonce changes (live mode).

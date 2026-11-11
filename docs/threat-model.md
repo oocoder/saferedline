@@ -23,16 +23,16 @@ After the response: exact request and response bytes were signed (EIP-191) by a 
 3. **Our server.** Not in a TEE. Zero retention is a code-level claim (no DB, no user-data cache, no write paths; evidence: sentinel test `tests/pipeline.test.mjs#L195`). Swap and core dumps are out of scope.
 4. **Model correctness.** Output may be wrong; `quoteFound` is only a verbatim-quote guard.
 
-## Deferred limits (from independent review)
+## Deferred limits (from separate-agent review)
 
-- **(a) TLS channel binding: RESOLVED.** The contract and signature calls go only over TLS whose leaf SPKI sha256 equals the fingerprint bound inside the attested gateway quote, checked in the handshake before any bytes are written. A mismatch fails with `ATTESTATION_FAILED` and the contract is not sent. `TLS_BOUND_STRICT=0` downgrades the check to informational (development only).
+- **(a) TLS channel binding: RESOLVED.** The contract and signature calls go only over TLS whose leaf SPKI sha256 equals the fingerprint bound inside the attested gateway quote, checked in the handshake before any bytes are written. A mismatch fails with `ATTESTATION_FAILED` and the contract is not sent. Binding is always enforced: a proxy or CDN in front of the NEAR gateway TEE fails closed.
 - **(b) Measurement pinning is optional** (`EXPECTED_COMPOSE_HASH`). We verify the enclave is genuine and which code hash it runs, not that the hash is a NEAR-published release. Fix: pin to known-good published releases.
 - **(c) TCB policy matches NEAR's reference verifier** and accepts `OutOfDate`; the status is shown in the UI.
 - **(d) Responses carry no per-request nonce**, so replay only matters to a party already holding the plaintext.
 
 ## Security review
 
-Full write-up: [security-review.md](security-review.md). An independent adversarial review found no way to produce `verified: true` from attacker-supplied bytes alone; checks fail closed.
+Full write-up: [security-review.md](security-review.md). A separate-agent adversarial review (self-run, not a third-party audit) found no way to produce `verified: true` from attacker-supplied bytes alone; checks fail closed.
 
 Tested: fail-open paths (missing quote body, compose, gateway, signer, malformed NRAS); that test seams (`deps`, twin) are unreachable from HTTP requests; the sentinel test showing contract text never reaches logs, error bodies or fs writes.
 

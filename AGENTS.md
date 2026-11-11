@@ -28,7 +28,8 @@ SafeRedline: local contract/NDA reviewer that sends text only to a NEAR AI Cloud
 - `npm ci` install
 - `npm test` offline suite (no network, no key)
 - `npm run twin` UI against a simulated NEAR API (no key); shows TWIN banner; failure modes via lowercase `TWIN_SCRIPT=<name>`
-- `npm run record` re-record the attestation fixture (live, no key)
+- `npm run record` re-record the attestation fixture (live, no key); rewrites the tracked fixture
+- `npm run check:docs` verify README/docs links and commands (also in `npm test`)
 - `npm run verify -- --attest-only` live attestation, no key
 - `npm start` then `npm run verify` live, needs `NEAR_API_KEY` in `.env`
 

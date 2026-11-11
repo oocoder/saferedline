@@ -182,20 +182,20 @@ describe('review 3b: per-GPU claims', () => {
 
 describe('review 8: TLS channel binding (gateway)', () => {
   const tls = (a) => a.checks.find((c) => c.id === 'tls_bound');
-  test('live cert == attested fingerprint: passes, informational by default', async () => {
+  test('live cert == attested fingerprint: tls_bound passes and counts toward verified', async () => {
     const a = await att({});
     assert.equal(tls(a).pass, true); assert.equal(tls(a).scope, 'gateway'); assert.equal(tls(a).informational, undefined);
     assert.equal(a.verified, true);
   });
-  test('mismatching live certificate: tls_bound fails and (strict by default) fails verified', async () => {
+  test('mismatching live certificate: tls_bound fails and fails verified (always enforced)', async () => {
     tw = await installTwin({ realSigner: true });
     const { setDeps } = await import('../src/attest.mjs');
     setDeps({ getTlsFingerprint: async () => 'ee'.repeat(32) });
     const a = await attestModel(fixture.model, '');
     assert.equal(tls(a).pass, false); assert.match(tls(a).detail, /≠ attested/);
     assert.equal(a.verified, false);
-    process.env.TLS_BOUND_STRICT = '0';
-    try { assert.equal((await attestModel(fixture.model, '')).verified, true); } finally { delete process.env.TLS_BOUND_STRICT; }
+    process.env.TLS_BOUND_STRICT = '0'; // the old opt-out no longer exists: must have no effect
+    try { assert.equal((await attestModel(fixture.model, '')).verified, false); } finally { delete process.env.TLS_BOUND_STRICT; }
   });
   test('unreadable live certificate fails tls_bound (fail closed)', async () => {
     tw = await installTwin({ realSigner: true });

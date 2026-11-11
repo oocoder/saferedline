@@ -1,6 +1,6 @@
 # Security review log — 2026-11-11
 
-Two independent reviews were run against this repo during the hackathon. Each finding is listed with where it was resolved, so a reader can check it in git history (`git log --oneline`) and in the tests.
+Three separate-agent reviews (self-run during the hackathon, not a third-party audit) were done against this repo. Each finding is listed with where it was resolved, so a reader can check it in git history (`git log --oneline`) and in the tests.
 
 ## Review 1 — architecture pre-review (before UI build)
 

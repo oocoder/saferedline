@@ -32,7 +32,7 @@ flowchart LR
 
 - Docs: README, architecture, threat model, API, demo script, submission kit written; zero-retention line links synced to final code (re-sync if `src/` changes).
 - Code and tests: backend, twin and offline tests complete (`npm test`, `npm run twin`); see `next.md` for phase status.
-- TLS pinning to the attested gateway key done; 97 tests.
+- TLS pinning to the attested gateway key done; 103 tests.
 - Temporary: non-ASCII signature path awaiting live confirmation (ASCII-safe JSON on by default; `ASCII_SAFE_JSON=0` to disable).
 - Live attestation check list: see README "Cryptographic verification"; informational checks are shown but don't count.
 - Code freeze target 16:15 ET, demo 16:30 ET (Nov 11); submission closes Nov 14 23:59 UTC.
@@ -59,4 +59,4 @@ flowchart LR
 | Active task list | [next.md](next.md) |
 | Original spec | [saferedline-vaultnda-spec-v3.md](saferedline-vaultnda-spec-v3.md) |
 
-Link check (not committed): `node .work/linkcheck.mjs`.
+Link check: `npm run check:docs` (also runs inside `npm test`).
