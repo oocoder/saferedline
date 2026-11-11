@@ -1,0 +1,12 @@
+# gitleaks config: extend the default rules, allowlist one public-data fixture.
+# tests/fixtures/attestation.json is RECORDED PUBLIC attestation evidence from NEAR AI Cloud:
+#  - "jwt" hits are NVIDIA NRAS attestation verdict tokens (issuer nras.attestation.nvidia.com),
+#    signed by NVIDIA, already expired, and not credentials;
+#  - "generic-api-key" hits are enclave PUBLIC keys (signing_key, ohttp key_config).
+# No credential is stored there. Everything else in the repo is scanned with the default rules.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Recorded public TEE attestation evidence (NVIDIA NRAS verdict JWTs, enclave public keys)"
+paths = ['''tests/fixtures/attestation\.json''']
