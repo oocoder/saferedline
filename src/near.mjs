@@ -3,7 +3,7 @@
 // variables for the lifetime of one call. Nothing is logged, cached or written.
 
 import './env.mjs'; // must stay first: loads .env before config below reads process.env
-import { deps, attestModel, verifyResponseSignature, canPin } from './attest.mjs';
+import { deps, attestModel, verifyResponseSignature, canPin, isRealKey } from './attest.mjs';
 import { AppError } from './errors.mjs';
 
 // Injectable config (tests / twin). Confidential TEE models are owned_by === "nearai" in GET /v1/models.
@@ -11,6 +11,7 @@ export const cfg = {
   apiKey: process.env.NEAR_API_KEY || process.env.NEARAI_API_KEY || '',
   model: process.env.NEAR_MODEL || 'z-ai/glm-5.3-flash',
   attest: attestModel,
+  twinSignerNote: undefined, // set only by the twin (tests/twin/install.mjs)
   timeoutMs: Number(process.env.NEAR_TIMEOUT_MS) || 90000,
   sigRetry: { tries: 5, delays: [300, 600, 1200, 2000] },
   // Serialize the request as pure-ASCII JSON (\uXXXX escapes). Valid JSON either way; guards against the
@@ -21,6 +22,7 @@ export const cfg = {
 export function setNearDeps(o) { Object.assign(cfg, o); }
 // Convenience snapshots for scripts (use cfg for the live values).
 export const API_KEY = cfg.apiKey;
+export const keyConfigured = () => isRealKey(cfg.apiKey);
 export const MODEL = cfg.model;
 
 export async function listTeeModels() {
@@ -146,7 +148,7 @@ async function chat(messages, { maxTokens = 4000, json = false, pin = null } = {
     }
   }
   if (!res.ok) {
-    if (res.status === 401 || res.status === 403) throw new AppError(`NEAR AI Cloud rejected the API key (HTTP ${res.status})`, { status: 502, code: 'NEAR_AUTH', stage: 'inference', contractSent: true });
+    if (res.status === 401 || res.status === 403) throw new AppError(`NEAR AI Cloud rejected the API key (${res.status}) — check NEAR_API_KEY`, { status: 502, code: 'NEAR_AUTH', stage: 'inference', contractSent: true });
     throw new AppError(`NEAR AI Cloud returned HTTP ${res.status}`, { status: 502, code: 'INFERENCE_FAILED', stage: 'inference', contractSent: true });
   }
   let body;
@@ -174,7 +176,7 @@ async function signatureWithRetry(args) {
 }
 
 function requireKey() {
-  if (!cfg.apiKey) throw new AppError('NEAR_API_KEY is not set (put it in .env)', { status: 503, code: 'NO_API_KEY', stage: 'config' });
+  if (!keyConfigured()) throw new AppError('NEAR_API_KEY is not set (put a real sk- key in .env)', { status: 503, code: 'NO_API_KEY', stage: 'config' });
 }
 
 /** GATE: attest first; if it does not verify, throw BEFORE any contract bytes are sent. */
@@ -194,7 +196,7 @@ const sigArgs = (r, attestation) => ({
   apiKey: cfg.apiKey, attestedSigners: attestation.signingAddresses, pin: pinOf(attestation),
 });
 const pinOf = (a) => (canPin(deps.baseUrl) ? a.gatewayTlsFingerprint || null : null);
-const channelOf = (a) => ({ tlsPinned: !!pinOf(a), fingerprint: pinOf(a), note: canPin(deps.baseUrl) ? (pinOf(a) ? 'chat and signature requests went only to a TLS endpoint matching the attested gateway key' : 'no attested TLS fingerprint; connection NOT pinned') : 'plain http (twin/dev): pinning skipped' });
+const channelOf = (a) => ({ tlsPinned: !!pinOf(a), fingerprint: pinOf(a), note: canPin(deps.baseUrl) ? (pinOf(a) ? 'chat and signature requests went only to a TLS endpoint matching the attested gateway key' : 'no attested TLS fingerprint; connection NOT pinned') : 'pinning skipped — twin uses plain HTTP (recorded evidence)' });
 
 /** Full private pipeline: attest (fresh nonce) -> infer in TEE -> verify response signature. */
 export async function analyzeContract(contractText) {
@@ -216,6 +218,7 @@ export async function analyzeContract(contractText) {
     verified: attestation.verified && signature.verified,
     analysis, analysisParseError, jsonMode: r.jsonMode,
     attestation, signature, channel: channelOf(attestation),
+    ...(cfg.twinSignerNote ? { twinSignerNote: cfg.twinSignerNote } : {}),
     usage: r.body.usage ?? null,
     model: cfg.model,
     retention: { persisted: false, enforcedBy: 'no write paths in src/; sentinel test tests/pipeline.test.mjs' },
@@ -238,6 +241,6 @@ export async function askFollowUp(contractText, question) {
   return {
     verified: attestation.verified && signature.verified,
     answer,
-    attestation, signature, channel: channelOf(attestation), model: cfg.model, ms: Date.now() - t0,
+    attestation, signature, channel: channelOf(attestation), ...(cfg.twinSignerNote ? { twinSignerNote: cfg.twinSignerNote } : {}), model: cfg.model, ms: Date.now() - t0,
   };
 }

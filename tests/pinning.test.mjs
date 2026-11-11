@@ -96,7 +96,7 @@ describe('plain-http twin and strict tls_bound', () => {
   });
   test('tls_bound always counts toward verified (no opt-out)', async () => {
     const t = await installTwin({ realSigner: true }); restoreTwin = t.restore;
-    setDeps({ getTlsFingerprint: async () => 'ee'.repeat(32) });
+    setDeps({ evidence: 'live', getTlsFingerprint: async () => 'ee'.repeat(32) });
     const a = await attestModel(fixture.model, '');
     assert.equal(a.checks.find((c) => c.id === 'tls_bound').pass, false);
     assert.equal(a.checks.find((c) => c.id === 'tls_bound').informational, undefined);

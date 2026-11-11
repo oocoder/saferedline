@@ -2,6 +2,7 @@
 import { deps, setDeps, attestModel, sha256hex } from '../../src/attest.mjs';
 import { cfg, setNearDeps } from '../../src/near.mjs';
 import { createTwin, fixture, wallet } from './near-twin.mjs';
+import { twinCtx } from '../../src/twinctx.mjs';
 
 // Named scenarios for TWIN_SCRIPT (case-insensitive; comma-separated to combine).
 export const TWIN_SCRIPTS = {
@@ -19,6 +20,7 @@ export const TWIN_SCRIPTS = {
   model_mismatch: { signature: 'model_mismatch' },
   '404_then_ok': { signature: '404_then_ok' },
   attestation_failed: { attestation: 'tampered_compose' },
+  attestation_auth: { attestation: '401' },
   attestation_unavailable: { attestation: '503' },
   nras_down: { nras: '503' },
   nras_bad_shape: { nras: 'bad_shape' },
@@ -50,14 +52,21 @@ export async function installTwin({ script = {}, apiKey = 'sk-twin-test-key', ti
   const saved = { deps: { ...deps, timeouts: { ...deps.timeouts } }, cfg: { ...cfg, sigRetry: { ...cfg.sigRetry } } };
   const { timeoutMs: scriptTimeout, ...s } = script;
   twin.script = s;
+  twin.resolve = resolveScript; // lets the twin map a per-request X-Twin-Script name to a scenario
+  const baseFetch = deps.fetch;
   setDeps({
+    // Forward the per-request scenario (set by the server from X-Twin-Script) to the twin; no shared mutable state.
+    fetch: (u, o = {}) => {
+      const name = twinCtx.getStore()?.script;
+      return baseFetch(u, name ? { ...o, headers: { ...(o.headers || {}), 'x-twin-script': name } } : o);
+    },
     baseUrl: twin.url, nrasUrl: twin.nrasUrl, jwksUrl: twin.jwksUrl,
     getCollateral: async (_u, q) => {
       const c = fixture.collateral[sha256hex(q)];
       if (!c) throw new Error('no recorded collateral for quote');
       return c;
     },
-    getTlsFingerprint: async () => fixture.tlsFingerprint,
+    evidence: 'recorded', // tls_bound is reported as skipped: the twin speaks plain HTTP
     nowSec: () => fixture.recordedAt,
     newNonce: () => fixture.nonce,
     timeouts: { attest: 5000, pccs: 5000, nras: 5000, signature: 5000 },
@@ -66,8 +75,12 @@ export async function installTwin({ script = {}, apiKey = 'sk-twin-test-key', ti
     apiKey, timeoutMs: scriptTimeout || timeoutMs,
     model: fixture.model,
     sigRetry: { tries: 5, delays: [5, 5, 5, 5] },
-    // The recorded attestation binds NEAR's real key, whose private half we don't have. For the happy path we
-    // keep every real check but swap in the twin's signer; `realSigner` leaves it to show a wrong-signer failure.
+    // SIGNER SWAP (twin only): the recorded attestation binds NEAR's real enclave key, whose private half we do not
+    // have, so the twin cannot produce a signature that verifies against it. For the happy path we keep every real
+    // check on the recorded evidence but replace the attested signer list with the twin's local test key. This means a
+    // twin "verified" proves the pipeline logic, NOT that a real enclave signed the answer; responses carry
+    // `twinSignerNote` to say so. `realSigner: true` keeps the real key to demonstrate the wrong-signer failure.
+    twinSignerNote: realSigner ? undefined : 'Twin signs responses with a local test key; live mode requires the attested enclave key.',
     attest: realSigner ? attestModel : async (m, k) => { const a = await attestModel(m, k); a.signingAddresses = [wallet.address]; return a; },
   });
   const restore = async () => { setDeps(saved.deps); setNearDeps(saved.cfg); await twin.close(); };

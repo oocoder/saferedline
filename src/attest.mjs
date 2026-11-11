@@ -42,6 +42,7 @@ export const deps = {
   jwksUrl: process.env.NRAS_JWKS_URL || 'https://nras.attestation.nvidia.com/.well-known/jwks.json',
   pccsUrl: process.env.PCCS_URL || PHALA_PCCS_URL,
   fallbackPccsUrl: INTEL_PCS_URL,
+  evidence: 'live', // 'recorded' when the twin replays a recorded attestation (set by tests/twin/install.mjs)
   tlsOptions: {}, // extra node:https options for pinned requests (tests: custom CA)
   getCollateral,
   // SPKI sha256 (hex) of the TLS certificate the gateway host presents to us right now.
@@ -66,6 +67,9 @@ export function setDeps(o) { Object.assign(deps, o); }
 // Intel quote; they flag that the platform is behind Intel's latest advisory baseline
 // (same policy as NEAR's reference verifier). tcbStatus is surfaced to the UI.
 const ACCEPTED_TCB = new Set(['UpToDate', 'SWHardeningNeeded', 'ConfigurationAndSWHardeningNeeded', 'OutOfDate']);
+
+/** A usable NEAR key: non-empty, sk- prefix, and not the .env.example placeholder. */
+export const isRealKey = (k) => typeof k === 'string' && k.startsWith('sk-') && !k.includes('your-key');
 
 export const newNonce = () => deps.newNonce();
 export const sha256hex = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
@@ -145,7 +149,7 @@ export async function fetchJson(url, opts = {}, timeoutMs = 30000, pin = null) {
 export async function fetchAttestation(model, nonce, apiKey) {
   const qs = new URLSearchParams({ model, provider: 'near', include_tls_fingerprint: 'true', signing_algo: 'ecdsa', nonce });
   const headers = { Accept: 'application/json', 'x-no-aliasing': 'true' };
-  if (apiKey && apiKey.startsWith('sk-')) headers.Authorization = `Bearer ${apiKey}`; // only needed for org-enabled models
+  if (isRealKey(apiKey)) headers.Authorization = `Bearer ${apiKey}`; // only needed for org-enabled models
   return fetchJson(`${deps.baseUrl}/attestation/report?${qs}`, { headers }, deps.timeouts.attest);
 }
 
@@ -350,6 +354,9 @@ export async function attestModel(model, apiKey) {
   try {
     report = await fetchAttestation(model, nonce, apiKey);
   } catch (e) {
+    if (e instanceof HttpError && (e.status === 401 || e.status === 403)) {
+      throw new AppError(`NEAR AI Cloud rejected the API key (${e.status}) — check NEAR_API_KEY`, { status: 502, code: 'NEAR_AUTH', stage: 'attestation' });
+    }
     throw new AppError(`NEAR attestation report unreachable (${e.message}) — failing closed`, { status: 503, code: 'ATTESTATION_UNAVAILABLE', stage: 'attestation' });
   }
   if (!report || typeof report !== 'object') {
@@ -371,8 +378,9 @@ export async function attestModel(model, apiKey) {
   if (report.gateway_attestation) {
     // The attested gateway key is bound to the TLS public key; compare with the certificate we actually reach.
     const want = String(report.gateway_attestation.tls_cert_fingerprint || '').toLowerCase();
-    let pass = false, detail;
-    if (!want) detail = 'gateway report has no tls_cert_fingerprint';
+    let pass = false, detail, skipped = false;
+    if (deps.evidence === 'recorded') { skipped = true; detail = 'skipped — twin uses plain HTTP (recorded evidence)'; }
+    else if (!want) detail = 'gateway report has no tls_cert_fingerprint';
     else {
       try {
         const u = new URL(deps.baseUrl);
@@ -381,7 +389,7 @@ export async function attestModel(model, apiKey) {
       } catch (e) { detail = `could not read live TLS certificate (${e.message})`; }
     }
     // Always enforced (counts toward `verified`); inference is also pinned to this key in near.mjs.
-    checks.push(check('tls_bound', 'gateway', 'TLS certificate matches the attested gateway', pass, detail));
+    checks.push({ ...check('tls_bound', 'gateway', 'TLS certificate matches the attested gateway', pass, detail), ...(skipped ? { informational: true } : {}) });
   }
   const pinned = (process.env.EXPECTED_COMPOSE_HASH || '').toLowerCase();
   // Informational only (excluded from `verified`): is the enclave software pinned to a known-good compose hash?
@@ -394,7 +402,7 @@ export async function attestModel(model, apiKey) {
   const first = modelRes[0];
   const att = {
     verified: checks.filter((c) => !c.informational).every((c) => c.pass),
-    nonce, model,
+    nonce, model, evidence: deps.evidence,
     signingAddresses: models.map((m) => m.signing_address).filter(Boolean),
     gatewaySigningAddress: report.gateway_attestation?.signing_address || null,
     gatewayTlsFingerprint: /^[0-9a-f]{64}$/i.test(report.gateway_attestation?.tls_cert_fingerprint || '') ? report.gateway_attestation.tls_cert_fingerprint.toLowerCase() : null,

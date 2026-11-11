@@ -4,7 +4,14 @@ Review confidential contracts and NDAs with an LLM that runs inside a NEAR AI Cl
 
 Built by @AlexBuildsNY at the NEAR Private AI Hackathon NYC (Build City x NEAR Legion), Nov 11 2026. Track: Privacy & Private AI. License: MIT.
 
-> **Live analysis needs your own NEAR AI Cloud key** (free to claim at https://nearbuilders.org/dashboard). Twin mode (`npm run twin`) needs no key and exercises every UI state except the real model: its enclave evidence is a recorded real attestation and its analyses are simulated. A hosted demo is planned (link TBD).
+> **Live analysis needs your own NEAR AI Cloud key** (free to claim at https://nearbuilders.org/dashboard). Twin mode (`npm run twin`) needs no key: it replays recorded real attestation evidence and scripted model outputs to exercise the verification and failure states; the real model needs a key. A hosted demo is planned (link TBD).
+
+**No key? 3 commands, 60s:** `git clone https://github.com/oocoder/saferedline && cd saferedline && npm ci && npm run twin`
+
+![Redline report and Verified TEE panel for the fictional Predatory SaaS NDA](docs/img/predatory-saas-nda-report.png)
+![Trust panel: nonce, signing key, compose hash, TLS-pinned transport, counted checks](docs/img/predatory-saas-nda-trust.png)
+
+Screenshots show only the bundled fictional sample contract (a real run against NEAR AI Cloud on 2026-11-11).
 
 ## The problem
 
@@ -32,9 +39,9 @@ Requires Node >= 20. Steps are numbered "do X, you should see Y".
 5. `npm run verify -- --attest-only` -> **live**, no key needed. Works without a key as of 2026-11-11 (NEAR's agent skill says the attestation endpoints may require a key; if you get an auth error, set `NEAR_API_KEY`). Prints a green check mark per passing check (Intel TDX quote, nonce binding, TLS binding, compose hash, RTMR3 replay, NVIDIA GPU verdict, ...) and ends with a summary line `Verified (attestation only): true`.
 6. `cp .env.example .env`, then set `NEAR_API_KEY=sk-...` (claim a key at https://nearbuilders.org/dashboard). `.env` is git-ignored.
 7. `npm start` -> prints `SafeRedline running -> http://127.0.0.1:3000`, `API key: configured`.
-8. `npm run verify` -> live attestation, one real private completion, and the response-signature checks; the summary line is `Verified: true` (with a key) or `Verified (attestation only): true` (without one). `npm run prove` writes the same run as a `--json` transcript.
+8. `npm run verify` -> live attestation, one real private completion, and the response-signature checks; the summary line is `Verified: true` (with a key) or `Verified (attestation only): true` (without one). `npm run -s prove > transcript.json` (`-s` keeps npm's banner out of the JSON) writes the same run as a `--json` transcript.
 
-Other commands: `npm run check:docs` (checks README/docs links and commands; also runs inside `npm test`), `npm run record` (re-records the attestation fixture; **rewrites the tracked** `tests/fixtures/attestation.json`), `npm run prove` (JSON verification transcript), `npm run e2e` (live browser test; needs Chrome and a running server), `npm run demo:record` (records the demo flow).
+Other commands: `npm run check:docs` (checks that README/docs relative links resolve, that `#L` line anchors point at the code the link text names via a rule table, and that documented `npm` commands exist; `docs/plans/` is excluded as historical; also runs inside `npm test`), `npm run record` (re-records the attestation fixture; **rewrites the tracked** `tests/fixtures/attestation.json`), `npm run prove` (JSON verification transcript), `npm run e2e` (live browser test; needs Chrome and a running server), `npm run demo:record` (records the demo flow).
 
 ## Try it as a judge
 
@@ -100,6 +107,8 @@ Run per request, in this order, before and after the contract is sent. Any faile
 
 Confirmed live 2026-11-11 with a real key: `npm run verify` passed all counted checks (23/23); the signed text carries the model prefix (`z-ai/glm-5.3-flash:<req>:<res>`), the reported algorithm is `ecdsa`, the completion and signature went over pinned TLS, and the signer equals the attested model key. Non-ASCII is also confirmed live: the contractor sample's `sig_req` passes with `ASCII_SAFE_JSON` on and off (the gateway hashes the bytes exactly as sent); an offline test covers non-ASCII bytes too.
 
+**Counts:** attestation-only (`npm run verify -- --attest-only`, `GET /api/attest`) shows 23 counted checks; a full analysis adds the 6 response-signature checks, so the panel shows 29/29. Informational checks are shown but not counted.
+
 The authoritative check list is whatever `GET /api/attest` returns (the model enclave, gateway enclave and GPU each contribute checks; informational ones are shown but don't count); ids are defined in `src/attest.mjs`. Design rationale: the architecture plan ([docs/plans/2026-11-11-architecture-plan.md](docs/plans/2026-11-11-architecture-plan.md)).
 
 ## The honest claim
@@ -119,22 +128,30 @@ The authoritative check list is whatever `GET /api/attest` returns (the model en
 
 Details: [docs/threat-model.md](docs/threat-model.md); separate-agent reviews (self-run, not a third-party audit): [docs/security-review.md](docs/security-review.md).
 
+### Why the compose hash is not pinned by default
+
+NEAR redeploys change the compose hash. A hard-coded pin would fail closed for judges if NEAR updates between Nov 14 and Nov 18. Operators who want a pin set `EXPECTED_COMPOSE_HASH`. For reference, the model enclave's compose hash observed on 2026-11-11 was `a0e3c6f4f21a60ea3f5c96bc7ef319b03a184ca2049605399275fbcea74e8c5f`.
+
+### Twin mode honesty
+
+In `npm run twin`, responses carry a `twinSignerNote` and are signed with a local test key, so the signer differs from the attested key shown by `/api/attest`; `tls_bound` is skipped because the twin speaks plain HTTP; the panel labels the evidence "recorded evidence". Twin mode demonstrates behavior, not a live enclave.
+
 ## Zero data retention
 
 Contract text and model output live only in local variables for the duration of one HTTP request. Links are to the code that enforces or demonstrates it (line numbers synced to the final commit):
 
 - No database, no user-data cache, no session store, no write paths in the server. Evidence: the sentinel test [`tests/pipeline.test.mjs#L238`](tests/pipeline.test.mjs#L238) asserts no writes and no content in logs or errors.
-- Request body read into a variable, dropped after use: [`src/server.mjs#L143`](src/server.mjs#L143) and [`#L153`](src/server.mjs#L153)
-- Logs are metadata only (method, path, status, ms); never content: [`src/server.mjs#L182-L183`](src/server.mjs#L182-L183)
-- `Cache-Control: no-store` and CSP `connect-src 'self'` (the page cannot send the contract anywhere but your localhost server): [`src/server.mjs#L42-L46`](src/server.mjs#L42-L46)
-- Server binds `127.0.0.1` by default: default in [`createServer` L121](src/server.mjs#L121), [`HOST` L193](src/server.mjs#L193), [`listen` L204](src/server.mjs#L204)
-- Attestation gate: the contract is never sent unless attestation verified (`attestOrThrow`): [`src/near.mjs#L181`](src/near.mjs#L181), called at [`#L203`](src/near.mjs#L203) and [`#L229`](src/near.mjs#L229). Contract text is held only in call-local variables in `analyzeContract` ([`#L200`](src/near.mjs#L200)).
-- TLS pinning: [`makePinCheck` `src/attest.mjs#L93`](src/attest.mjs#L93), [`pinnedFetch` `#L107`](src/attest.mjs#L107), [`tls_bound` `#L384`](src/attest.mjs#L384); pin-mismatch handling in [`src/near.mjs#L118`](src/near.mjs#L118)
-- NVIDIA JWT verification: [`verifyJwt` `src/attest.mjs#L180`](src/attest.mjs#L180), [`gpuClaimProblems` `#L199`](src/attest.mjs#L199)
-- Response-signature verification (after inference): [`verifyResponseSignature` `src/attest.mjs#L422`](src/attest.mjs#L422); [`sig_req` L436](src/attest.mjs#L436), [`sig_model` L438](src/attest.mjs#L438), [`sig_attested` L449](src/attest.mjs#L449)
-- Attestation verifier entry points: [`verifyOne` `src/attest.mjs#L253`](src/attest.mjs#L253) (e.g. `rd_signer` [L290](src/attest.mjs#L290)), [`attestModel` `#L346`](src/attest.mjs#L346); the module performs no disk writes or content logging.
+- Request body read into a variable, dropped after use: [`src/server.mjs#L144`](src/server.mjs#L144) and [`#L153`](src/server.mjs#L154)
+- Logs are metadata only (method, path, status, ms); never content: [`src/server.mjs#L186-L187`](src/server.mjs#L186-L187)
+- `Cache-Control: no-store` and CSP `connect-src 'self'` (the page cannot send the contract anywhere but your localhost server): [`src/server.mjs#L43-L47`](src/server.mjs#L43-L47)
+- Server binds `127.0.0.1` by default: default in [`createServer` L122](src/server.mjs#L122), [`HOST` L197](src/server.mjs#L197), [`listen` L208](src/server.mjs#L208)
+- Attestation gate: the contract is never sent unless attestation verified (`attestOrThrow`): [`src/near.mjs#L183`](src/near.mjs#L183), called at [`#L205`](src/near.mjs#L205) and [`#L232`](src/near.mjs#L232). Contract text is held only in call-local variables in `analyzeContract` ([`#L202`](src/near.mjs#L202)).
+- TLS pinning: [`makePinCheck` `src/attest.mjs#L97`](src/attest.mjs#L97), [`pinnedFetch` `#L111`](src/attest.mjs#L111), [`tls_bound` `#L392`](src/attest.mjs#L392); pin-mismatch handling in [`src/near.mjs#L120`](src/near.mjs#L120)
+- NVIDIA JWT verification: [`verifyJwt` `src/attest.mjs#L184`](src/attest.mjs#L184), [`gpuClaimProblems` `#L203`](src/attest.mjs#L203)
+- Response-signature verification (after inference): [`verifyResponseSignature` `src/attest.mjs#L430`](src/attest.mjs#L430); [`sig_req` L444](src/attest.mjs#L444), [`sig_model` L446](src/attest.mjs#L446), [`sig_attested` L457](src/attest.mjs#L457)
+- Attestation verifier entry points: [`verifyOne` `src/attest.mjs#L257`](src/attest.mjs#L257) (e.g. `rd_signer` [L294](src/attest.mjs#L294)), [`attestModel` `#L350`](src/attest.mjs#L350); the module performs no disk writes or content logging.
 - Test that proves it: a sentinel string `ZXQ-SECRET-7731` is analyzed and asserted absent from logs, error bodies and filesystem writes: [`tests/pipeline.test.mjs#L238`](tests/pipeline.test.mjs#L238)
-- Local CSRF protection: Host/Origin allowlist (`ALLOWED_HOSTS` adds extra hosts) and JSON-only POST, so another web page cannot make your browser post to your local server: [`src/server.mjs#L163`](src/server.mjs#L163).
+- Local CSRF protection: Host/Origin allowlist (`ALLOWED_HOSTS` adds extra hosts) and JSON-only POST, so another web page cannot make your browser post to your local server: [`src/server.mjs#L164`](src/server.mjs#L164).
 - Browser: no `localStorage` of contract text; PDFs are parsed in the browser and only extracted text is sent.
 
 ## Configuration
@@ -143,7 +160,7 @@ Set in `.env` or the environment (see `.env.example`). Only `NEAR_API_KEY` is re
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `NEAR_API_KEY` | none | NEAR AI Cloud key (`sk-...`); not needed for twin or `--attest-only` |
+| `NEAR_API_KEY` | empty in `.env.example` | NEAR AI Cloud key (`sk-...`); a placeholder value counts as not configured; not needed for twin or `--attest-only`. A rejected key returns `NEAR_AUTH` ("NEAR AI Cloud rejected the API key (401)") |
 | `NEAR_MODEL` | `z-ai/glm-5.3-flash` | Any Confidential TEE model (`owned_by=nearai`) |
 | `HOST` | `127.0.0.1` | Bind address; keep local to preserve the privacy story |
 | `PORT` | `3000` | Listen port |
