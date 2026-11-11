@@ -23,7 +23,7 @@ Engineering loop for every defect: reproduce in twin (red) → fix → green →
 - [ ] Commit (staged files only), tag `demo-2026-11-11`.
 
 ## After demo (by Nov 14)
-- [ ] User: public GitHub repo, X post (draft in docs/submission-kit.md), form at nearhackathon.com/#apply.
+- [x] Public repo (github.com/oocoder/saferedline), X post with video, form submitted 2026-11-11 2:33PM ET.
 - [ ] Hosted demo required for judges (Q-012), up until ≥ Nov 18 — stretch: run SafeRedline itself in a TEE (dstack CVM) to close the "server sees plaintext" gap.
 - [x] TLS channel binding + inference pinning (done 13:17)
 - [ ] Stretch: ICM `workspace/` for batch contract review
