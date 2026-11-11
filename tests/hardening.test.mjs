@@ -184,25 +184,25 @@ describe('review 8: TLS channel binding (gateway)', () => {
   const tls = (a) => a.checks.find((c) => c.id === 'tls_bound');
   test('live cert == attested fingerprint: passes, informational by default', async () => {
     const a = await att({});
-    assert.equal(tls(a).pass, true); assert.equal(tls(a).scope, 'gateway'); assert.equal(tls(a).informational, true);
+    assert.equal(tls(a).pass, true); assert.equal(tls(a).scope, 'gateway'); assert.equal(tls(a).informational, undefined);
     assert.equal(a.verified, true);
   });
-  test('mismatching live certificate: tls_bound fails but verified unaffected (informational)', async () => {
+  test('mismatching live certificate: tls_bound fails and (strict by default) fails verified', async () => {
     tw = await installTwin({ realSigner: true });
     const { setDeps } = await import('../src/attest.mjs');
     setDeps({ getTlsFingerprint: async () => 'ee'.repeat(32) });
     const a = await attestModel(fixture.model, '');
     assert.equal(tls(a).pass, false); assert.match(tls(a).detail, /≠ attested/);
-    assert.equal(a.verified, true);
-    process.env.TLS_BOUND_STRICT = '1';
-    try { assert.equal((await attestModel(fixture.model, '')).verified, false); } finally { delete process.env.TLS_BOUND_STRICT; }
+    assert.equal(a.verified, false);
+    process.env.TLS_BOUND_STRICT = '0';
+    try { assert.equal((await attestModel(fixture.model, '')).verified, true); } finally { delete process.env.TLS_BOUND_STRICT; }
   });
-  test('unreadable live certificate fails the info check, not the attestation', async () => {
+  test('unreadable live certificate fails tls_bound (fail closed)', async () => {
     tw = await installTwin({ realSigner: true });
     const { setDeps } = await import('../src/attest.mjs');
     setDeps({ getTlsFingerprint: async () => { throw new Error('ECONNREFUSED'); } });
     const a = await attestModel(fixture.model, '');
-    assert.match(tls(a).detail, /could not read/); assert.equal(a.verified, true);
+    assert.match(tls(a).detail, /could not read/); assert.equal(a.verified, false);
   });
   test('tampered attested fingerprint breaks the quote binding (rd_signer)', async () => {
     const a = await att({ mutate: (r) => { r.gateway_attestation.tls_cert_fingerprint = 'ee'.repeat(32); } });

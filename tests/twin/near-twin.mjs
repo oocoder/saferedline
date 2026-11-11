@@ -2,6 +2,7 @@
 // Serves the RECORDED real public attestation (tests/fixtures/attestation.json) and signs chat
 // responses with a fixed test key. It is NOT a TEE: nothing it says is evidence of anything.
 import http from 'node:http';
+import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -27,13 +28,13 @@ const CLEAN = (quote) => ({
   missing_protections: ['Simulated: mutual termination right', 'Simulated: liability cap'],
 });
 
-export function createTwin() {
+export function createTwin({ tls } = {}) {
   const twin = {
     script: {}, // { attestation, nras, chat, signature }
     chatRequests: 0, requests: [], store: new Map(), sigHits: new Map(), chatCalls: 0, counter: 0,
     url: '', nrasUrl: '', jwksUrl: '',
   };
-  const server = http.createServer((req, res) => {
+  const server = (tls ? (h) => https.createServer(tls, h) : (h) => http.createServer(h))((req, res) => {
     const u = new URL(req.url, 'http://x');
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
@@ -124,7 +125,8 @@ export function createTwin() {
   });
   twin.listen = () => new Promise((resolve) => server.listen(0, '127.0.0.1', () => {
     const port = server.address().port;
-    twin.url = `http://127.0.0.1:${port}/v1`; twin.nrasUrl = `http://127.0.0.1:${port}/nras`; twin.jwksUrl = `http://127.0.0.1:${port}/jwks`;
+    const o = `${tls ? 'https' : 'http'}://${tls ? 'localhost' : '127.0.0.1'}:${port}`;
+    twin.url = `${o}/v1`; twin.nrasUrl = `${o}/nras`; twin.jwksUrl = `${o}/jwks`;
     resolve(twin);
   }));
   twin.close = () => new Promise((r) => { server.closeAllConnections?.(); server.close(() => r()); });

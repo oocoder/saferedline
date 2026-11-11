@@ -20,6 +20,7 @@
 import './env.mjs'; // must stay first: loads .env before deps below reads process.env
 import crypto from 'node:crypto';
 import tls from 'node:tls';
+import https from 'node:https';
 import dcap from '@phala/dcap-qvl';
 import { verifyMessage } from 'ethers';
 import { AppError } from './errors.mjs';
@@ -41,6 +42,7 @@ export const deps = {
   jwksUrl: process.env.NRAS_JWKS_URL || 'https://nras.attestation.nvidia.com/.well-known/jwks.json',
   pccsUrl: process.env.PCCS_URL || PHALA_PCCS_URL,
   fallbackPccsUrl: INTEL_PCS_URL,
+  tlsOptions: {}, // extra node:https options for pinned requests (tests: custom CA)
   getCollateral,
   // SPKI sha256 (hex) of the TLS certificate the gateway host presents to us right now.
   getTlsFingerprint: (host, port = 443) => new Promise((resolve, reject) => {
@@ -58,6 +60,7 @@ export const deps = {
   timeouts: { attest: 30000, pccs: 15000, nras: 30000, signature: 15000 },
 };
 export function setDeps(o) { Object.assign(deps, o); }
+// (deps.pinnedFetch is attached below, after pinnedFetch is defined)
 
 // UpToDate is ideal. OutOfDate / SWHardeningNeeded still mean a genuine, signature-valid
 // Intel quote; they flag that the platform is behind Intel's latest advisory baseline
@@ -83,13 +86,52 @@ function withTimeout(promise, ms, message) {
   return Promise.race([promise, timer]).finally(() => clearTimeout(t));
 }
 
-export async function fetchJson(url, opts = {}, timeoutMs = 30000) {
+/** SPKI sha256 (hex) of a DER certificate. */
+export const spkiSha256 = (certDer) => sha256hex(new crypto.X509Certificate(certDer).publicKey.export({ type: 'spki', format: 'der' }));
+
+/** checkServerIdentity for node:tls: normal hostname check first, then the attested SPKI pin. Runs BEFORE any request byte is written. */
+export function makePinCheck(fingerprint) {
+  const want = String(fingerprint || '').toLowerCase();
+  return (host, cert) => {
+    const e = tls.checkServerIdentity(host, cert);
+    if (e) return e;
+    let got = '';
+    try { got = spkiSha256(cert.raw); } catch { /* fall through to mismatch */ }
+    if (!want || got !== want) {
+      return Object.assign(new Error('TLS certificate does not match the attested gateway'), { code: 'TLS_PIN_MISMATCH' });
+    }
+  };
+}
+
+/** fetch-like request over node:https whose server certificate must match the attested fingerprint. Returns a Response (raw bytes intact). */
+export function pinnedFetch(url, opts = {}, fingerprint) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(new URL(url), {
+      method: opts.method || 'GET', headers: opts.headers, agent: false, signal: opts.signal,
+      ...deps.tlsOptions, checkServerIdentity: makePinCheck(fingerprint),
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve(new Response(Buffer.concat(chunks), { status: res.statusCode })));
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    if (opts.body !== undefined) req.write(opts.body);
+    req.end();
+  });
+}
+deps.pinnedFetch = pinnedFetch;
+export const canPin = (url) => String(url).startsWith('https:');
+
+export async function fetchJson(url, opts = {}, timeoutMs = 30000, pin = null) {
   let res, text;
   try {
-    res = await deps.fetch(url, { ...opts, signal: AbortSignal.timeout(timeoutMs) });
+    const o = { ...opts, signal: AbortSignal.timeout(timeoutMs) };
+    res = pin && canPin(url) ? await deps.pinnedFetch(url, o, pin) : await deps.fetch(url, o);
     text = await res.text();
   } catch (e) {
-    throw new HttpError(e?.name === 'TimeoutError' ? 'timed out' : `network error (${e?.cause?.code || e?.message || 'fetch failed'})`, 0);
+    if (e?.code === 'TLS_PIN_MISMATCH') throw Object.assign(new HttpError('TLS certificate does not match the attested gateway', 0), { code: e.code });
+    throw new HttpError(e?.name === 'TimeoutError' || e?.name === 'AbortError' ? 'timed out' : `network error (${e?.cause?.code || e?.message || 'fetch failed'})`, 0);
   }
   let body;
   try { body = JSON.parse(text); } catch { body = text; }
@@ -338,8 +380,8 @@ export async function attestModel(model, apiKey) {
         pass = live === want; detail = pass ? `${want.slice(0, 16)}… (attested = live certificate)` : `live ${String(live).slice(0, 16)}… ≠ attested ${want.slice(0, 16)}…`;
       } catch (e) { detail = `could not read live TLS certificate (${e.message})`; }
     }
-    // Informational unless TLS_BOUND_STRICT=1: a CDN/proxy in front of the TEE would legitimately mismatch.
-    checks.push({ ...check('tls_bound', 'gateway', 'TLS certificate matches the attested gateway', pass, detail), ...(process.env.TLS_BOUND_STRICT === '1' ? {} : { informational: true }) });
+    // Counts toward `verified` by default. TLS_BOUND_STRICT=0 makes it informational (for a CDN/proxy in front of the TEE).
+    checks.push({ ...check('tls_bound', 'gateway', 'TLS certificate matches the attested gateway', pass, detail), ...(process.env.TLS_BOUND_STRICT === '0' ? { informational: true } : {}) });
   }
   const pinned = (process.env.EXPECTED_COMPOSE_HASH || '').toLowerCase();
   // Informational only (excluded from `verified`): is the enclave software pinned to a known-good compose hash?
@@ -355,6 +397,7 @@ export async function attestModel(model, apiKey) {
     nonce, model,
     signingAddresses: models.map((m) => m.signing_address).filter(Boolean),
     gatewaySigningAddress: report.gateway_attestation?.signing_address || null,
+    gatewayTlsFingerprint: /^[0-9a-f]{64}$/i.test(report.gateway_attestation?.tls_cert_fingerprint || '') ? report.gateway_attestation.tls_cert_fingerprint.toLowerCase() : null,
     appName: models[0]?.info?.app_name || null,
     composeHash: first?.composeHash || models[0]?.info?.compose_hash || null,
     tcbStatus,
@@ -376,7 +419,7 @@ export async function attestModel(model, apiKey) {
  * "<model>:<sha256(request bytes)>:<sha256(response bytes)>" with an attested key.
  * requestBody / responseBody: Buffer (preferred, exact bytes) or string (utf8).
  */
-export async function verifyResponseSignature({ chatId, model, requestBody, responseBody, apiKey, attestedSigners, attestedSigner }) {
+export async function verifyResponseSignature({ chatId, model, requestBody, responseBody, apiKey, attestedSigners, attestedSigner, pin = null }) {
   const checks = [];
   const S = (id, label, pass, detail) => checks.push(check(id, 'signature', label, pass, detail));
   const toBuf = (b) => (Buffer.isBuffer(b) ? b : Buffer.from(String(b), 'utf8'));
@@ -386,7 +429,7 @@ export async function verifyResponseSignature({ chatId, model, requestBody, resp
   const signers = (attestedSigners || (attestedSigner ? [attestedSigner] : [])).filter(Boolean).map((s) => s.toLowerCase());
   try {
     const qs = new URLSearchParams({ model, signing_algo: 'ecdsa' });
-    const sig = await fetchJson(`${deps.baseUrl}/signature/${encodeURIComponent(chatId)}?${qs}`, { headers: { Authorization: `Bearer ${apiKey}` } }, deps.timeouts.signature);
+    const sig = await fetchJson(`${deps.baseUrl}/signature/${encodeURIComponent(chatId)}?${qs}`, { headers: { Authorization: `Bearer ${apiKey}` } }, deps.timeouts.signature, pin);
     const text = String(sig?.text ?? '');
     const parts = text.split(':');
     const resH = parts.pop(); const reqH = parts.pop(); const signedModel = parts.join(':');
