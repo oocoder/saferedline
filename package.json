@@ -1,0 +1,19 @@
+{
+  "name": "safe-redline",
+  "version": "1.0.0",
+  "description": "SafeRedline: zero-leak contract & NDA reviewer running on NEAR AI Cloud TEEs with cryptographic attestation",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "verify": "node scripts/verify_tee.mjs"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@phala/dcap-qvl": "^0.7.1",
+    "ethers": "^6.17.0"
+  }
+}

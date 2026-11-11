@@ -1,0 +1,15 @@
+STANDARD MUTUAL NON-DISCLOSURE AGREEMENT
+
+This Mutual Non-Disclosure Agreement ("Agreement") is entered into on November 11, 2026, between Vanguard Labs LLC and Horizon Partners Inc. (each a "Party").
+
+1. Purpose. The Parties wish to explore a potential business partnership ("Purpose").
+
+2. Definition of Confidential Information. "Confidential Information" means non-public technical or business information disclosed by either Party in writing marked "Confidential" or, if disclosed orally, summarized in writing within fifteen (15) days.
+
+3. Exclusions. Confidential Information excludes information that: (a) is or becomes publicly available without breach; (b) was known prior to disclosure; (c) is independently developed without use of Confidential Information; or (d) is rightfully received from a third party.
+
+4. Term & Survival. This Agreement expires one (1) year from the Effective Date. Confidentiality obligations survive for three (3) years following termination.
+
+5. Return or Destruction. Upon written request, the receiving Party will promptly return or certify destruction of all Confidential Information.
+
+6. Governing Law. This Agreement is governed by the laws of the State of Delaware, without regard to conflict of law principles.
