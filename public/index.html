@@ -102,7 +102,7 @@ aside{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto}
 .vbadge.bad{color:var(--red);background:var(--red-bg);border-color:var(--red)}
 .vbadge.warn{color:var(--amber);background:var(--amber-bg);border-color:var(--amber)}
 .vbadge .sub{display:block;font-size:.95rem;font-weight:500;margin-top:4px;color:var(--ink)}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;margin:16px 0;align-items:baseline}
+.kv{display:grid;grid-template-columns:9.5rem minmax(0,1fr);gap:8px 14px;margin:16px 0;align-items:baseline}
 .kv dt{color:var(--ink2);font-size:.9rem}
 .kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
 .hash{font-family:var(--mono);font-size:.9rem;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 6px;cursor:pointer;color:var(--ink);text-align:left;display:inline-block;max-width:100%;overflow-wrap:anywhere}
@@ -293,7 +293,7 @@ function setSteps(active,failed){
 }
 
 /* ---------- trust panel ---------- */
-var GROUPS=[['gateway','Gateway enclave (Intel TDX)'],['model','Model enclave (Intel TDX)'],['gpu','NVIDIA GPU confidential computing'],['signature','Response signature'],['info','Informational']];
+var GROUPS=[['gateway','Gateway enclave (Intel TDX)'],['model','Model enclave (Intel TDX)'],['gpu','NVIDIA GPU confidential computing'],['signature','Response signature'],['info','Informational'],['infoall','Informational (not counted)']];
 function renderTrust(att,sig,verified,opts,channel){
   opts=opts||{};
   var vb=$('vbadge'),body=$('tbody');clear(body);clear(vb);
@@ -314,13 +314,13 @@ function renderTrust(att,sig,verified,opts,channel){
   var big=el('div','bignum');
   var nChecks=att.checks.concat(sig?sig.checks:[]).filter(function(c){return !c.informational});
   var passed=nChecks.filter(function(c){return c.pass}).length;
-  var s1=el('div','stat',passed+'/'+nChecks.length);s1.appendChild(el('small',null,'checks passed'));big.appendChild(s1);
+  var s1=el('div','stat',passed+'/'+nChecks.length);s1.appendChild(el('small',null,'counted checks passed'));big.appendChild(s1);
   if(att.gpuCount!=null){var s2=el('div','stat',att.gpuCount);s2.appendChild(el('small',null,'GPUs in CC mode'));big.appendChild(s2)}
   body.appendChild(big);
 
   var kv=el('dl','kv');
   function add(k,v){kv.appendChild(el('dt',null,k));var d=el('dd');if(v instanceof Node)d.appendChild(v);else d.textContent=v==null?'n/a':v;kv.appendChild(d)}
-  add('Fresh nonce',hashEl(att.nonce,10));
+  add(health&&health.mode==='twin'?'Nonce (recorded \u2014 twin replays a real recorded attestation)':'Fresh nonce',hashEl(att.nonce,10));
   add('Model',el('span','mono',att.model||'n/a'));
   add('Signing key(s)',(function(){var w=el('span');(att.signingAddresses||[]).forEach(function(a){var d=el('div');d.appendChild(hashEl(a,8));w.appendChild(d)});if(!(att.signingAddresses||[]).length)w.textContent='none';return w})());
   add('Compose hash',hashEl(att.composeHash,10));
@@ -343,10 +343,10 @@ function renderTrust(att,sig,verified,opts,channel){
   var list=el('div');body.appendChild(list);
   var all=att.checks.map(function(c){return c}).concat(sig?sig.checks.map(function(c){return Object.assign({},c,{scope:c.scope||'signature'})}):[]);
   var order=[],seen={};
-  GROUPS.forEach(function(g){seen[g[0]]=1});
+  GROUPS.forEach(function(g){seen[g[0]]=1});delete seen.infoall;
   var delay=0;
   GROUPS.forEach(function(g){
-    var items=all.filter(function(c){return (seen[c.scope]?c.scope:'info')===g[0]});
+    var items=all.filter(function(c){return g[0]==='infoall'?!!c.informational:(!c.informational&&(seen[c.scope]?c.scope:'info')===g[0])});
     if(!items.length)return;
     var grp=el('div','grp');grp.appendChild(el('h4',null,g[1]));list.appendChild(grp);
     items.forEach(function(c){
@@ -359,7 +359,12 @@ function renderTrust(att,sig,verified,opts,channel){
   });
   // reveal after delay so animation staggers (opacity restored by animation)
   var rows=list.querySelectorAll('.chk');for(var i=0;i<rows.length;i++)rows[i].style.opacity='';
-  if(sig||opts.retention){body.appendChild(el('div','retention','0 bytes written to disk. Nothing stored. Memory freed on response.'))}
+  if(sig||opts.retention){
+    var rt=opts.retention||{},rd=el('div','retention');
+    if(rt.enforcedBy&&rt.persisted!==true)rd.appendChild(el('div',null,'Nothing persisted \u2014 '+rt.enforcedBy));
+    if(rt.persisted===false||(rt.persisted===undefined&&(rt.bytesWrittenToDisk===0||!rt.enforcedBy)))rd.appendChild(el('div',null,'0 bytes written to disk. Memory released on response.'));
+    if(rd.firstChild)body.appendChild(rd);
+  }
 }
 
 /* ---------- errors ---------- */
@@ -392,7 +397,7 @@ $('analyze').addEventListener('click',function(){
   api('/api/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:t,source:source})}).then(function(r){
     clearTimeout(t2);if(my!==gen)return;
     if(r.verified){setSteps(3);setTimeout(function(){if(my===gen)setSteps(4)},400)}else setSteps(0,3);
-    renderTrust(r.attestation,r.signature,r.verified,null,r.channel);
+    renderTrust(r.attestation,r.signature,r.verified,{retention:r.retention},r.channel);
     renderAnalysis(r);
     $('results').hidden=false;
     var rs=$('analysis');setTimeout(function(){if(my===gen)rs.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})},450);
@@ -436,9 +441,9 @@ function renderAnalysis(r){
     k.appendChild(lr);k.appendChild(el('div','redline',c.suggested_redline));
     box.appendChild(k);
   });
+  if(!fc.length&&!r.analysisParseError&&r.verified){var ok=el('div','alert','No predatory clauses found');ok.style.cssText='color:var(--green);background:var(--green-bg);border-color:var(--green-line)';ok.setAttribute('role','status');box.appendChild(ok)}
   var mp=a.missing_protections||[];
   if(mp.length){box.appendChild(el('h3',null,'Missing standard protections')).style.marginTop='24px';var ul=el('ul','missing');mp.forEach(function(m){ul.appendChild(el('li',null,m))});box.appendChild(ul)}
-  if(!fc.length&&!mp.length&&!r.analysisParseError)box.appendChild(el('p','note','No flagged clauses or missing protections.'));
 }
 
 /* ---------- ask ---------- */
@@ -448,7 +453,7 @@ $('ask').addEventListener('click',function(){
   clear($('ask-err'));clear($('ask-out'));var my=gen;setBusy(true);$('ask').textContent='Asking...';
   api('/api/ask',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:t,question:q})}).then(function(r){
     if(my!==gen)return;
-    renderTrust(r.attestation,r.signature,r.verified,null,r.channel);
+    renderTrust(r.attestation,r.signature,r.verified,{retention:r.retention},r.channel);
     var o=$('ask-out');clear(o);
     if(!r.verified)o.appendChild(el('div','alert red','UNVERIFIED RESPONSE: do not rely on this answer.'));
     o.appendChild(el('div',null,r.answer));
