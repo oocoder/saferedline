@@ -1,18 +1,49 @@
-# Demo script (2 minutes, live)
+# Demo script
 
-Setup before going on stage: `.env` has a valid key; `npm start` running; page open at http://127.0.0.1:3000; Wi-Fi checked; `npm run verify -- --attest-only` run once to confirm the network path. Second terminal ready with `npm run twin`.
+Two versions: **3 minutes** (if 11-18 teams sign up for the slot) and **5 minutes** (if 10 or fewer). Both use the live app.
+
+Setup before going on stage: `.env` has a valid key; `npm start` running; page open at http://127.0.0.1:3000; Wi-Fi checked; `npm run verify` run once (it passed 23/23 counted checks live on 2026-11-11). Second terminal ready with `npm run twin`.
+
+**Live timings (2026-11-11):** Balanced about 6s, Predatory about 24s, Contractor about 33s, follow-up about 4.5s. Demo with **Predatory SaaS NDA (High)** and talk over the stepper for about 20 seconds.
+
+**If live is slow:** a live analysis takes about 10-30 seconds. Talk over the stepper: "Right now it is attesting the enclave, then it will send the contract, then it checks the enclave's signature. Nothing leaves my laptop until the first step passes."
+
+## Trust panel lines (use in both versions)
+
+Point at each item in order:
+
+1. **Fresh nonce:** "This random number was generated just now, for this one request."
+2. **Intel TDX quote:** "Intel's hardware signed a quote that contains that nonce, so this evidence cannot be replayed."
+3. **NVIDIA GPUs:** "NVIDIA's attestation service says the GPUs are in confidential-computing mode, against the same nonce."
+4. **TLS certificate bound inside the enclave:** "The connection my contract travels over is pinned to a key that is inside the attested gateway, so a relay in front cannot read it."
+5. **Signed answer:** "The answer was signed by a key the hardware vouched for, over the exact bytes I sent and received."
+
+## 3-minute version
 
 | Time | Do | Say |
 |---|---|---|
-| 0:00 | Show the empty UI. | "This is the document you can't paste into a chatbot: an NDA. SafeRedline reviews it with an AI that runs inside a hardware enclave, and proves it." |
-| 0:15 | Click **Predatory SaaS NDA (High)**. | "A fictional but realistic one-sided NDA." |
-| 0:20 | Click **Analyze privately**. Point at the stages: Attesting enclave, Running in TEE, Verifying signature. | "Before a single byte of this contract leaves my machine, the app verifies the enclave. If that fails, nothing is sent." |
-| 0:40 | Open the IP-assignment clause card (section 3). Read the quote, the risk, then the suggested redline. Click **Copy**. | "It caught that anything I say in meetings becomes theirs, without compensation, and drafted balanced replacement wording I can paste back." |
-| 1:00 | Glance at the other flags: perpetual term, uncapped indemnity, Cayman venue, one-sided definition. | "Five traps in a one-page NDA." |
-| 1:10 | Right panel, Verified TEE: point at the nonce. | "This nonce was generated fresh for this request. The Intel TDX hardware quote contains it, so this evidence can't be replayed." |
-| 1:25 | Point at the checks: Intel quote, debug off, compose hash, GPU verdict, then signature group. | "Intel TDX plus NVIDIA GPU confidential computing, every counted check passing. And the answer itself was signed by a key proven to be inside that enclave." |
-| 1:40 | Click **Verify enclave only**; in live mode the nonce changes (in twin mode it is the recorded one). | "No contract, no key needed: anyone can run this check themselves." |
-| 1:50 | Closing line. | "Privacy you can check, not a promise you have to trust. SafeRedline: private contract review on NEAR AI Cloud." |
+| 0:00 | Show the empty UI. | "An NDA is the document you can't paste into a chatbot. SafeRedline reviews it with an AI inside a hardware enclave, and proves it." |
+| 0:15 | Click **Predatory SaaS NDA (High)**, then **Analyze privately**. | "Before a byte of this contract leaves my machine, the app verifies the enclave. If that fails, nothing is sent." |
+| 0:30 | While it runs, read the stepper. | See "If live is slow" above. |
+| 0:50 | Open the IP-assignment clause card (section 3); read quote, risk, redline; click **Copy**. | "Anything I say in meetings becomes theirs, for free. It drafted balanced wording I can paste back." |
+| 1:20 | Glance at the other flags: perpetual term, uncapped indemnity, Cayman venue, one-sided definition. | "Five traps in a one-page NDA." |
+| 1:35 | Trust panel, walk the five lines above. | (lines above) |
+| 2:30 | Click **Verify enclave only**; the nonce changes. | "No contract, anyone can run this check themselves." |
+| 2:45 | Close. | "Other AI contract tools promise zero retention. SafeRedline proves where your contract ran." |
+
+## 5-minute version
+
+| Time | Do | Say |
+|---|---|---|
+| 0:00 | Empty UI. | "Confidential contracts are exactly what people paste into chatbots, and a privacy policy is all they get back." |
+| 0:30 | Click **Balanced Mutual NDA (Low)**, analyze. | "A normal NDA first, as a baseline: Low risk, almost nothing flagged." |
+| 1:15 | Click **Predatory SaaS NDA (High)**, analyze; talk over the stepper. | See "If live is slow". |
+| 1:45 | IP-assignment clause, then perpetual term, indemnity, venue; click **Copy** on a redline. | "Each flag has the verbatim quote, why it is risky, and replacement wording." |
+| 2:45 | Trust panel, walk the five lines above, slowly. | (lines above) |
+| 3:45 | Terminal: `npm run verify`. | "The same checks from the command line: every counted check passes." |
+| 4:15 | Show the limits: README "What is NOT proven". | "Our own server is not attested; the enclave software is identified by hash, not audited. We say so up front." |
+| 4:30 | Click **Verify enclave only**. | "Anyone can re-run this." |
+| 4:45 | Close. | "Other AI contract tools promise zero retention. SafeRedline proves where your contract ran." |
 
 ## Fallback (Wi-Fi or key failure)
 

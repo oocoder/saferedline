@@ -8,6 +8,7 @@ export const TWIN_SCRIPTS = {
   ok: {},
   fenced_json: { chat: 'fenced_json' },
   think_tags: { chat: 'think_tags' },
+  think_unclosed: { chat: 'think_unclosed' },
   non_json: { chat: 'non_json' },
   non_json_body: { chat: 'non_json_body' },
   xss: { chat: 'xss' },

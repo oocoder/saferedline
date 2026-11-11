@@ -33,7 +33,7 @@ Requires Node >= 20. Steps are numbered "do X, you should see Y".
 6. `npm start` -> prints `SafeRedline running -> http://127.0.0.1:3000`, `API key: configured`.
 7. `npm run verify` -> live attestation, one real private completion, and the response-signature checks; the summary line is `Verified: true` (with a key) or `Verified (attestation only): true` (without one). `npm run prove` writes the same run as a `--json` transcript.
 
-Other commands: `npm run check:docs` (checks README/docs links and commands; also runs inside `npm test`), `npm run record` (re-records the attestation fixture; **rewrites the tracked** `tests/fixtures/attestation.json`), `npm run prove` (JSON verification transcript; being added).
+Other commands: `npm run check:docs` (checks README/docs links and commands; also runs inside `npm test`), `npm run record` (re-records the attestation fixture; **rewrites the tracked** `tests/fixtures/attestation.json`), `npm run prove` (JSON verification transcript), `npm run e2e` (live browser test; needs Chrome and a running server), `npm run demo:record` (records the demo flow).
 
 ## Try it as a judge
 
@@ -97,6 +97,8 @@ Run per request, in this order, before and after the contract is sent. Any faile
 | `sig_model`: signed model id equals the model we asked for | The enclave served the model we requested. |
 | `sig_fetch`: signature retrieved from the enclave | A missing signature is a failure, not a pass. |
 
+Confirmed live 2026-11-11 with a real key: `npm run verify` passed all counted checks (23/23); the signed text carries the model prefix (`z-ai/glm-5.3-flash:<req>:<res>`), the reported algorithm is `ecdsa`, the completion and signature went over pinned TLS, and the signer equals the attested model key. Non-ASCII is also confirmed live: the contractor sample's `sig_req` passes with `ASCII_SAFE_JSON` on and off (the gateway hashes the bytes exactly as sent); an offline test covers non-ASCII bytes too.
+
 The authoritative check list is whatever `GET /api/attest` returns (the model enclave, gateway enclave and GPU each contribute checks; informational ones are shown but don't count); ids are defined in `src/attest.mjs`. Design rationale: the architecture plan ([docs/plans/2026-11-11-architecture-plan.md](docs/plans/2026-11-11-architecture-plan.md)).
 
 ## The honest claim
@@ -120,17 +122,17 @@ Details: [docs/threat-model.md](docs/threat-model.md); separate-agent reviews (s
 
 Contract text and model output live only in local variables for the duration of one HTTP request. Links are to the code that enforces or demonstrates it (line numbers synced to the final commit):
 
-- No database, no user-data cache, no session store, no write paths in the server. Evidence: the sentinel test [`tests/pipeline.test.mjs#L222`](tests/pipeline.test.mjs#L222) asserts no writes and no content in logs or errors.
+- No database, no user-data cache, no session store, no write paths in the server. Evidence: the sentinel test [`tests/pipeline.test.mjs#L238`](tests/pipeline.test.mjs#L238) asserts no writes and no content in logs or errors.
 - Request body read into a variable, dropped after use: [`src/server.mjs#L105`](src/server.mjs#L105) and [`#L114`](src/server.mjs#L114)
 - Logs are metadata only (method, path, status, ms); never content: [`src/server.mjs#L143-L144`](src/server.mjs#L143-L144)
 - `Cache-Control: no-store` and CSP `connect-src 'self'` (the page cannot send the contract anywhere but your localhost server): [`src/server.mjs#L42-L46`](src/server.mjs#L42-L46)
 - Server binds `127.0.0.1` by default: default in [`createServer` L93](src/server.mjs#L93), [`HOST` L150](src/server.mjs#L151), [`listen` L159](src/server.mjs#L159)
-- Attestation gate: the contract is never sent unless attestation verified (`attestOrThrow`): [`src/near.mjs#L173`](src/near.mjs#L173), called at [`#L195`](src/near.mjs#L195) and [`#L221`](src/near.mjs#L221). Contract text is held only in call-local variables in `analyzeContract` ([`#L192`](src/near.mjs#L192)).
-- TLS pinning: [`makePinCheck` `src/attest.mjs#L93`](src/attest.mjs#L93), [`pinnedFetch` `#L107`](src/attest.mjs#L107), [`tls_bound` `#L384`](src/attest.mjs#L384); pin-mismatch handling in [`src/near.mjs#L110`](src/near.mjs#L110)
+- Attestation gate: the contract is never sent unless attestation verified (`attestOrThrow`): [`src/near.mjs#L181`](src/near.mjs#L181), called at [`#L203`](src/near.mjs#L203) and [`#L229`](src/near.mjs#L229). Contract text is held only in call-local variables in `analyzeContract` ([`#L200`](src/near.mjs#L200)).
+- TLS pinning: [`makePinCheck` `src/attest.mjs#L93`](src/attest.mjs#L93), [`pinnedFetch` `#L107`](src/attest.mjs#L107), [`tls_bound` `#L384`](src/attest.mjs#L384); pin-mismatch handling in [`src/near.mjs#L118`](src/near.mjs#L118)
 - NVIDIA JWT verification: [`verifyJwt` `src/attest.mjs#L180`](src/attest.mjs#L180), [`gpuClaimProblems` `#L199`](src/attest.mjs#L199)
 - Response-signature verification (after inference): [`verifyResponseSignature` `src/attest.mjs#L422`](src/attest.mjs#L422); [`sig_req` L436](src/attest.mjs#L436), [`sig_model` L438](src/attest.mjs#L438), [`sig_attested` L449](src/attest.mjs#L449)
 - Attestation verifier entry points: [`verifyOne` `src/attest.mjs#L253`](src/attest.mjs#L253) (e.g. `rd_signer` [L290](src/attest.mjs#L290)), [`attestModel` `#L346`](src/attest.mjs#L346); the module performs no disk writes or content logging.
-- Test that proves it: a sentinel string `ZXQ-SECRET-7731` is analyzed and asserted absent from logs, error bodies and filesystem writes: [`tests/pipeline.test.mjs#L222`](tests/pipeline.test.mjs#L222)
+- Test that proves it: a sentinel string `ZXQ-SECRET-7731` is analyzed and asserted absent from logs, error bodies and filesystem writes: [`tests/pipeline.test.mjs#L238`](tests/pipeline.test.mjs#L238)
 - Local CSRF protection: Host/Origin allowlist (`ALLOWED_HOSTS` adds extra hosts) and JSON-only POST, so another web page cannot make your browser post to your local server: [`src/server.mjs#L124`](src/server.mjs#L124).
 - Browser: no `localStorage` of contract text; PDFs are parsed in the browser and only extracted text is sent.
 

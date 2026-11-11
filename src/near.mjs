@@ -14,8 +14,8 @@ export const cfg = {
   timeoutMs: Number(process.env.NEAR_TIMEOUT_MS) || 90000,
   sigRetry: { tries: 5, delays: [300, 600, 1200, 2000] },
   // Serialize the request as pure-ASCII JSON (\uXXXX escapes). Valid JSON either way; guards against the
-  // gateway re-serializing non-ASCII before hashing. Not yet confirmed against the live gateway (needs an API key);
-  // set ASCII_SAFE_JSON=0 to send raw UTF-8 instead. Offline tests cover both forms.
+  // gateway re-serializing non-ASCII before hashing. Observed live 2026-11-11: sig_req passes for the non-ASCII contractor
+  // sample with BOTH settings (the gateway hashes our bytes as sent), so this is harmless belt-and-braces; ASCII_SAFE_JSON=0 sends UTF-8.
   asciiSafe: process.env.ASCII_SAFE_JSON !== '0',
 };
 export function setNearDeps(o) { Object.assign(cfg, o); }
@@ -53,15 +53,23 @@ Analyze the user's contract text and identify predatory, one-sided, or risky cla
   ]
 }
 
-Rules: quote original_text verbatim. If the contract is balanced, return an empty flagged_clauses array and overall_risk "Low". Output JSON only — no markdown fences, no commentary. This is informational analysis, not legal advice.`;
+Rules: quote original_text verbatim (the shortest span that shows the problem, one sentence at most). Be terse: executive_summary at most 2 sentences; why_its_risky at most 20 words; suggested_redline at most 30 words; flag at most 7 clauses, the most important genuinely risky ones; missing_protections at most 3 short items (3-8 words each), and an empty array if the contract is balanced. If the contract is balanced, return an empty flagged_clauses array and overall_risk "Low". Output JSON only — no markdown fences, no commentary. This is informational analysis, not legal advice.`;
 
-const FOLLOWUP_PROMPT = `You are SafeRedline, a contracts analyst running inside a hardware-isolated TEE. Answer the user's question about the contract below concisely (max ~150 words), in plain English, citing the relevant section number. This is informational, not legal advice.`;
+const FOLLOWUP_PROMPT = `You are SafeRedline, a contracts analyst running inside a hardware-isolated TEE. Answer the user's question about the contract below concisely (max ~150 words), in plain English, citing the relevant section number. This is informational, not legal advice. Return ONLY valid JSON: {"answer": "your answer"}.`;
 
 
 const FOLLOWUP_PROMPT_TEXT = FOLLOWUP_PROMPT;
 
+/** Drop model reasoning: everything up to the LAST </think> (handles a bare closing tag with no opener), then any paired blocks. */
+export function stripThinking(text) {
+  let t = String(text);
+  const i = t.lastIndexOf('</think>');
+  if (i >= 0) t = t.slice(i + '</think>'.length);
+  return t.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+}
+
 function extractJson(text) {
-  const cleaned = String(text).replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```(?:json)?/g, '');
+  const cleaned = stripThinking(text).replace(/```(?:json)?/g, '');
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');
   if (start < 0 || end < start) throw new Error('no json');
@@ -200,7 +208,7 @@ export async function analyzeContract(contractText) {
   let parsed, analysisParseError = false;
   try { parsed = extractJson(r.content); } catch {
     analysisParseError = true;
-    parsed = { overall_risk: 'Unknown', executive_summary: r.content.replace(/<think>[\s\S]*?<\/think>/g, '').slice(0, 600) };
+    parsed = { overall_risk: 'Unknown', executive_summary: stripThinking(r.content).slice(0, 600) };
   }
   const analysis = normalizeAnalysis(parsed, contractText);
   const signature = await signatureWithRetry(sigArgs(r, attestation));
@@ -222,11 +230,14 @@ export async function askFollowUp(contractText, question) {
   const r = await chat([
     { role: 'system', content: FOLLOWUP_PROMPT_TEXT },
     { role: 'user', content: `CONTRACT:\n${contractText}\n\nQUESTION: ${question}` },
-  ], { maxTokens: 600, pin: pinOf(attestation) });
+  ], { maxTokens: 600, json: true, pin: pinOf(attestation) }); // json mode also switches the model's reasoning off (measured live: ~8 vs ~170 tokens)
+  let answer;
+  try { const a = extractJson(r.content).answer; answer = typeof a === 'string' ? a : null; } catch { answer = null; }
+  answer = (answer ?? stripThinking(r.content)).trim();
   const signature = await signatureWithRetry(sigArgs(r, attestation));
   return {
     verified: attestation.verified && signature.verified,
-    answer: r.content.replace(/<think>[\s\S]*?<\/think>/g, '').trim(),
+    answer,
     attestation, signature, channel: channelOf(attestation), model: cfg.model, ms: Date.now() - t0,
   };
 }

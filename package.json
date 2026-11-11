@@ -14,11 +14,16 @@
     "twin": "SAFEREDLINE_TWIN=1 node src/server.mjs",
     "record": "node scripts/record_fixtures.mjs",
     "check:docs": "node scripts/check_docs.mjs",
-    "prove": "node scripts/verify_tee.mjs --json"
+    "prove": "node scripts/verify_tee.mjs --json",
+    "e2e": "node tests/e2e/ui.e2e.mjs",
+    "demo:record": "node tests/e2e/record_demo.mjs"
   },
   "license": "MIT",
   "dependencies": {
     "@phala/dcap-qvl": "^0.7.1",
     "ethers": "^6.17.0"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.65.0"
   }
 }
