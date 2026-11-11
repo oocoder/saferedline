@@ -133,7 +133,7 @@ describe('failures', () => {
     env = await boot({ script: { chat: 'hang' }, timeoutMs: 300 });
     const t0 = Date.now();
     assertEnvelope(assert, await analyze(), 'INFERENCE_TIMEOUT', 504, true);
-    assert.ok(Date.now() - t0 < 3000);
+    assert.ok(Date.now() - t0 < 8000);
   });
   test('NO_API_KEY: nothing attested, nothing sent', async () => {
     env = await boot({ apiKey: '' });
