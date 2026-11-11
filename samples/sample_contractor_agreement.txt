@@ -1,8 +1,8 @@
 INDEPENDENT CONTRACTOR SERVICES AGREEMENT
 
-This Independent Contractor Services Agreement ("Agreement") is made on November 11, 2026, between Northwind Ventures Corp. ("Client") and Jordan Rivera, an individual ("Contractor"). All names and terms in this document are fictional.
+This Independent Contractor Services Agreement (“Agreement”) is made on November 11, 2026, between Northwind Ventures Corp. (“Client”) and Jordan Rivera-Núñez, an individual (“Contractor”). All names and terms in this document are fictional.
 
-1. Services. Contractor shall provide software development services as requested by Client from time to time, including any additional services Client deems reasonably related.
+§ 1 — Services. Contractor shall provide software development services as requested by Client from time to time, including any additional services Client deems reasonably related.
 
 2. Payment. Client shall pay Contractor $95 per hour, net ninety (90) days after Client's acceptance of each invoice. Client may withhold payment for any deliverable it determines, in its sole discretion, to be unsatisfactory.
 
