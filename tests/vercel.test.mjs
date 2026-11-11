@@ -127,7 +127,8 @@ describe('api/index.mjs (Vercel function)', () => {
 describe('vercel config', () => {
   const cfgJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
   test('vercel.json: rewrite to the function, function limits/files, region, and the same security headers as the app', () => {
-    assert.deepEqual(cfgJson.rewrites, [{ source: '/:path*', destination: '/api/index?__path=:path*' }]);
+    assert.equal(cfgJson.framework, null, 'framework preset "node" would build src/server.mjs instead of api/index.mjs');
+    assert.deepEqual(cfgJson.rewrites, [{ source: '/(.*)', destination: '/api/index?__path=$1' }]);
     assert.equal(cfgJson.functions['api/index.mjs'].maxDuration, 120);
     assert.equal(cfgJson.functions['api/index.mjs'].includeFiles, '{public,samples}/**');
     assert.deepEqual(cfgJson.regions, ['iad1']);
@@ -241,5 +242,20 @@ describe('caches in attest.mjs', () => {
     tw.twin.script = {};
     // different cache key not available -> would need a new quote; here the cache still holds the good one, so verify stays true
     assert.equal((await attestModel(fixture.model, '')).verified, true);
+  });
+});
+
+describe('deployment bundle hygiene', () => {
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+  test('src/ and api/ never import tests/ or scripts/ (Vercel ignores them, so the bundler would fail)', () => {
+    for (const f of [...walk(path.join(ROOT, 'src')), ...walk(path.join(ROOT, 'api'))].filter((x) => x.endsWith('.mjs'))) {
+      const code = fs.readFileSync(f, 'utf8').split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n'); // drop comments
+      assert.doesNotMatch(code, /(?:from|import\s*\()\s*['"][^'"]*\b(?:tests|scripts)\//, `${path.relative(ROOT, f)} imports tests/ or scripts/`);
+      assert.doesNotMatch(code, /['"]\.\.?\/(?:\.\.\/)?(?:tests|scripts)\//, `${path.relative(ROOT, f)} builds a relative path into tests/ or scripts/`);
+    }
+  });
+  test('src/server.mjs refuses SAFEREDLINE_TWIN and points at npm run twin', () => {
+    const r = spawnSync(process.execPath, ['src/server.mjs'], { cwd: ROOT, encoding: 'utf8', env: { ...process.env, SAFEREDLINE_TWIN: '1', PORT: '0', SAFEREDLINE_ENV_FILE: '/nonexistent' }, timeout: 8000 });
+    assert.notEqual(r.status, 0); assert.match(r.stderr, /npm run twin/);
   });
 });
