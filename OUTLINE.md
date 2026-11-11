@@ -14,7 +14,7 @@ sections: Summary, System diagram, Status, Open items, Pointers
 
 Local contract/NDA reviewer. A Node HTTP server (127.0.0.1, no dependencies beyond `ethers` and `@phala/dcap-qvl`) serves a single-file UI. For each analysis it generates a fresh nonce, fetches and verifies NEAR AI Cloud gateway and model attestations (Intel TDX, NVIDIA GPU CC), and only then sends the contract to `z-ai/glm-5.3-flash`. The enclave's response signature is verified against the attested key. Nothing is persisted. An offline twin of the NEAR API and a recorded real attestation fixture make `npm test` and `npm run twin` work without network or key.
 
-Honest limits: TLS not bound to the enclave, compose hash not pinned, our server not attested. See [README.md](README.md) and [docs/threat-model.md](docs/threat-model.md).
+Honest limits: compose hash not pinned to a release by default, gateway/model still see plaintext, our server not attested. See [README.md](README.md) and [docs/threat-model.md](docs/threat-model.md).
 
 ## System diagram
 
@@ -32,6 +32,7 @@ flowchart LR
 
 - Docs: README, architecture, threat model, API, demo script, submission kit written; zero-retention line links synced to final code (re-sync if `src/` changes).
 - Code and tests: backend, twin and offline tests complete (`npm test`, `npm run twin`); see `next.md` for phase status.
+- TLS pinning to the attested gateway key done; 97 tests.
 - Temporary: non-ASCII signature path awaiting live confirmation (ASCII-safe JSON on by default; `ASCII_SAFE_JSON=0` to disable).
 - Live attestation runs 22 checks (see README "Cryptographic verification").
 - Code freeze target 16:15 ET, demo 16:30 ET (Nov 11); submission closes Nov 14 23:59 UTC.
@@ -40,7 +41,7 @@ flowchart LR
 
 - [ ] User: public GitHub repo, X post (draft in [docs/submission-kit.md](docs/submission-kit.md)), form at nearhackathon.com/#apply.
 - [ ] Hosted demo required for judges (Q-012), up until at least Nov 18; stretch: run SafeRedline itself in a TEE (dstack CVM) to close the "server sees plaintext" gap.
-- [ ] Stretch: ICM `workspace/` for batch contract review; TLS fingerprint binding (plan #25).
+- [ ] Stretch: ICM `workspace/` for batch contract review.
 
 ## Pointers
 

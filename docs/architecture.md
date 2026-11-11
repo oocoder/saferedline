@@ -2,7 +2,7 @@
 
 ## Trust chain
 
-Browser (localhost) -> **SafeRedline server (our code, not in a TEE, sees plaintext)** -> TLS to `cloud-api.near.ai` -> **NEAR gateway in a TEE (attested, sees plaintext)** -> **model in a TEE with NVIDIA GPU confidential computing (attested, sees plaintext)**.
+Browser (localhost) -> **SafeRedline server (our code, not in a TEE, sees plaintext)** -> TLS (leaf key pinned to the attested gateway) to `cloud-api.near.ai` -> **NEAR gateway in a TEE (attested, sees plaintext)** -> **model in a TEE with NVIDIA GPU confidential computing (attested, sees plaintext)**.
 
 ```mermaid
 flowchart LR
@@ -11,7 +11,7 @@ flowchart LR
     S --> N["near.mjs<br/>pipeline"]
     N --> A["attest.mjs<br/>verifier"]
   end
-  N -->|"TLS, WebPKI only<br/>(NOT bound to enclave)"| GW
+  N -->|"TLS pinned to attested<br/>gateway key"| GW
   subgraph E["Trust boundary 2: NEAR AI Cloud enclaves (attested)"]
     GW["Gateway TEE (Intel TDX)"] --> M["Model TEE<br/>Intel TDX + NVIDIA GPU CC"]
   end

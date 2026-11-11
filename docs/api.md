@@ -13,6 +13,7 @@ Check = { id: string, label: string, pass: boolean, detail?: string,
 Attestation = {
   verified: boolean, nonce: string /*64 hex*/, model: string,
   signingAddresses: string[], gatewaySigningAddress: string | null,
+  gatewayTlsFingerprint: string | null,           // SPKI sha256 bound in the attested gateway quote
   appName: string | null, composeHash: string | null,
   tcbStatus: string | null,                       // 'UpToDate' → green, else amber
   measurement: { mrtd: string, rtmr3: string, mrConfigId: string } | null,
@@ -33,6 +34,12 @@ Analysis = { overall_risk: 'High' | 'Medium' | 'Low' | 'Unknown', executive_summ
 ```
 
 `Check.scope` lets B group the panel; A sets it instead of the `"Model TEE:"` label prefix.
+
+```ts
+Channel = { tlsPinned: boolean, fingerprint: string | null, note: string }
+```
+
+`channel` reports whether the contract and signature requests were sent only over TLS whose leaf SPKI sha256 equals `attestation.gatewayTlsFingerprint`. The `tls_bound` check counts toward `verified` by default; `TLS_BOUND_STRICT=0` makes it informational (CDN/proxy in front of the TEE, development only). A pin mismatch is `ATTESTATION_FAILED` and the contract is not sent.
 
 **Error envelope (every non-2xx):**
 
@@ -67,10 +74,10 @@ A signature failure is **not** an error. It returns 200 with `verified: false`.
 - **`GET /api/attest`** → `200 Attestation`. Returned even when `verified` is false; the UI shows the red checks. Needs no key. `503 ATTESTATION_UNAVAILABLE` only when the report itself can't be fetched.
 - **`POST /api/analyze`**
   - Request: `{ text: string /* 50..512KB chars, trimmed */, source?: 'paste' | 'txt' | 'pdf' | 'sample' }`. `source` is optional metadata; it is never logged.
-  - 200: `{ verified: boolean /* attestation.verified && signature.verified */, analysis: Analysis, analysisParseError: boolean, jsonMode: 'native' | 'prompt-only', attestation: Attestation, signature: Signature, usage: object | null, model: string, retention: { bytesWrittenToDisk: 0, logged: false, storedContracts: 0 }, ms: number }`
+  - 200: `{ channel: Channel, verified: boolean /* attestation.verified && signature.verified */, analysis: Analysis, analysisParseError: boolean, jsonMode: 'native' | 'prompt-only', attestation: Attestation, signature: Signature, usage: object | null, model: string, retention: { bytesWrittenToDisk: 0, logged: false, storedContracts: 0 }, ms: number }`
 - **`POST /api/ask`**
   - Request: `{ text: string /* 50..512KB */, question: string /* 1..1000 */ }`
-  - 200: `{ verified: boolean, answer: string, attestation: Attestation, signature: Signature, model: string, ms: number }`
+  - 200: `{ channel: Channel, verified: boolean, answer: string, attestation: Attestation, signature: Signature, model: string, ms: number }`
 
 
 Related: [architecture.md](architecture.md).
