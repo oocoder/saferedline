@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SafeRedline - Private Contract Review</title>
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<style>
+:root{
+  --bg:#f4f1ea; --panel:#fffdf8; --ink:#0b1f3a; --ink2:#44546a; --line:#d9d3c5;
+  --navy:#0b1f3a; --onnavy:#f4f1ea;
+  --green:#0a7a3d; --green-bg:#e3f4ea; --green-line:#8fd0a8;
+  --red:#b3261e; --red-bg:#fbe9e7; --red-line:#e6a39d;
+  --amber:#8a5a00; --amber-bg:#fff3d6; --amber-line:#e8c26a;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#070f1c; --panel:#0e1a2e; --ink:#eef2f8; --ink2:#a9b6c9; --line:#25354f;
+    --navy:#050b15; --onnavy:#eef2f8;
+    --green:#4cd68a; --green-bg:#0c2a1b; --green-line:#1f6b43;
+    --red:#ff8a80; --red-bg:#2e1412; --red-line:#7a2e29;
+    --amber:#f5c04d; --amber-bg:#2d2209; --amber-line:#7a5a14;
+  }
+}
+*{box-sizing:border-box}
+html{font-size:16px}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:1rem;line-height:1.5}
+button{font:inherit;cursor:pointer}
+.mono{font-family:var(--mono)}
+header{background:var(--navy);color:var(--onnavy);padding:14px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+header h1{margin:0;font-size:1.5rem;letter-spacing:.2px}
+header .tag{opacity:.8;font-size:1rem}
+header .spacer{flex:1}
+.pill{display:inline-block;border:1px solid currentColor;border-radius:999px;padding:2px 12px;font-size:.9rem}
+#twin{display:none;background:var(--amber-bg);color:var(--amber);border-bottom:2px solid var(--amber-line);padding:10px 24px;font-weight:700;text-align:center}
+#twin.on{display:block}
+main{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:24px;padding:24px;max-width:1700px;margin:0 auto;align-items:start}
+@media (max-width:900px){main{grid-template-columns:1fr;padding:16px;gap:16px}header{padding:12px 16px}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
+h2{margin:0 0 12px;font-size:1.25rem}
+h3{margin:0;font-size:1.1rem}
+label.lbl{display:block;font-weight:600;margin-bottom:6px}
+textarea{width:100%;min-height:220px;resize:vertical;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:12px;font:inherit;font-size:1rem}
+textarea:focus,button:focus-visible,input:focus-visible{outline:3px solid #3b82f6;outline-offset:2px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:10px 16px;font-weight:600}
+.btn:hover{border-color:var(--ink2)}
+.btn.primary{background:var(--navy);color:var(--onnavy);border-color:var(--navy);font-size:1.15rem;padding:12px 24px}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn.primary{background:#2b6cff;border-color:#2b6cff;color:#fff}}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:4px 10px;font-size:.9rem}
+.note{color:var(--ink2);font-size:.9rem}
+.counter{margin-left:auto}
+/* stepper */
+#stepper{display:none;margin-top:16px;gap:8px;flex-wrap:wrap}
+#stepper.on{display:flex}
+.step{flex:1 1 180px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--ink2);display:flex;gap:10px;align-items:center}
+.step .n{width:28px;height:28px;border-radius:50%;border:2px solid currentColor;display:grid;place-items:center;font-weight:700;flex:none}
+.step.active{color:var(--ink);border-color:var(--ink);background:var(--bg)}
+.step.active .n{animation:pulse 1s infinite}
+.step.done{color:var(--green);border-color:var(--green-line);background:var(--green-bg)}
+.step.fail{color:var(--red);border-color:var(--red-line);background:var(--red-bg)}
+@keyframes pulse{50%{opacity:.4}}
+/* alerts */
+.alert{border:2px solid;border-radius:10px;padding:12px 16px;margin-top:16px;font-weight:600}
+.alert.red{color:var(--red);background:var(--red-bg);border-color:var(--red-line)}
+.alert.amber{color:var(--amber);background:var(--amber-bg);border-color:var(--amber-line)}
+.alert .sub{font-weight:400;color:var(--ink)}
+/* results */
+#results{margin-top:24px}
+.riskbar{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.risk{font-size:2.6rem;font-weight:800;line-height:1;padding:14px 26px;border-radius:12px;border:3px solid;letter-spacing:1px;text-transform:uppercase}
+.risk.High{color:var(--red);background:var(--red-bg);border-color:var(--red)}
+.risk.Medium{color:var(--amber);background:var(--amber-bg);border-color:var(--amber)}
+.risk.Low{color:var(--green);background:var(--green-bg);border-color:var(--green)}
+.risk.Unknown{color:var(--ink2);border-color:var(--ink2)}
+.stat{font-size:2.2rem;font-weight:800;line-height:1}
+.stat small{display:block;font-size:.9rem;font-weight:400;color:var(--ink2)}
+.summary{font-size:1.15rem;margin:16px 0 0}
+.clause{border:1px solid var(--line);border-left:6px solid var(--red);border-radius:10px;padding:16px;margin-top:16px;background:var(--panel)}
+.clause.Medium{border-left-color:var(--amber)}
+.clause .head{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.tag{font-size:.85rem;font-weight:700;border-radius:6px;padding:2px 8px;border:1px solid}
+.tag.High{color:var(--red);border-color:var(--red-line);background:var(--red-bg)}
+.tag.Medium,.tag.warn{color:var(--amber);border-color:var(--amber-line);background:var(--amber-bg)}
+.quote{margin:12px 0 0;padding:10px 12px;background:var(--red-bg);color:var(--red);border-radius:8px;text-decoration:line-through;text-decoration-thickness:1.5px;white-space:pre-wrap;overflow-wrap:anywhere}
+.lab{margin:14px 0 4px;font-size:.85rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--ink2)}
+.why{white-space:pre-wrap;overflow-wrap:anywhere}
+.redline{padding:10px 12px;background:var(--green-bg);color:var(--green);border:1px solid var(--green-line);border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.missing li{margin:6px 0}
+/* trust panel */
+aside{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto}
+@media (max-width:900px){aside{position:static;max-height:none}}
+.vbadge{border:3px solid;border-radius:12px;padding:14px 16px;font-weight:800;font-size:1.25rem;line-height:1.3}
+.vbadge.idle{color:var(--ink2);border-color:var(--line);font-weight:600;font-size:1.05rem}
+.vbadge.ok{color:var(--green);background:var(--green-bg);border-color:var(--green)}
+.vbadge.bad{color:var(--red);background:var(--red-bg);border-color:var(--red)}
+.vbadge.warn{color:var(--amber);background:var(--amber-bg);border-color:var(--amber)}
+.vbadge .sub{display:block;font-size:.95rem;font-weight:500;margin-top:4px;color:var(--ink)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;margin:16px 0;align-items:baseline}
+.kv dt{color:var(--ink2);font-size:.9rem}
+.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.hash{font-family:var(--mono);font-size:.9rem;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 6px;cursor:pointer;color:var(--ink);text-align:left;display:inline-block;max-width:100%;overflow-wrap:anywhere}
+.hash.open{white-space:normal}
+.copy{margin-left:6px}
+.bignum{display:flex;gap:24px;flex-wrap:wrap;margin:16px 0 0}
+.grp{margin-top:16px}
+.grp h4{margin:0 0 6px;font-size:.85rem;text-transform:uppercase;letter-spacing:.6px;color:var(--ink2)}
+.chk{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line);animation:in .25s ease-out both}
+.chk .ic{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:.8rem;color:#fff;margin-top:1px}
+.chk.pass .ic{background:var(--green)}
+.chk.fail .ic{background:var(--red)}
+.chk.fail .lb{color:var(--red);font-weight:700}
+.chk.info .ic{background:var(--ink2)}
+.chk .dt{display:block;font-size:.85rem;color:var(--ink2);overflow-wrap:anywhere}
+@keyframes in{from{opacity:0;transform:translateY(4px)}}
+@media (prefers-reduced-motion:reduce){.chk,.step.active .n{animation:none}}
+.retention{margin-top:16px;font-family:var(--mono);font-size:.95rem;padding:10px 12px;border:1px dashed var(--green);color:var(--green);border-radius:8px;background:var(--green-bg)}
+.sr{position:absolute;left:-9999px}
+#ask-out{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:12px}
+input[type=text]{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:inherit}
+</style>
+</head>
+<body>
+<header>
+  <h1>SafeRedline</h1>
+  <span class="tag">Private contract review inside a hardware enclave</span>
+  <span class="spacer"></span>
+  <span class="pill mono" id="hmode">connecting...</span>
+</header>
+<div id="twin" role="status">TWIN MODE: simulated enclave, not a real TEE</div>
+
+<main>
+<section>
+  <div class="card">
+    <h2>1. Your contract</h2>
+    <div id="samples" class="row" style="margin-top:0"><span class="note">Loading samples...</span></div>
+    <div style="margin-top:14px">
+      <label class="lbl" for="text">Paste contract text, or load a file</label>
+      <textarea id="text" spellcheck="false" placeholder="Paste a contract or NDA here. Nothing is stored; it is sent only to the verified enclave."></textarea>
+    </div>
+    <div class="row">
+      <label class="btn" for="file" style="display:inline-block">Upload .txt / .pdf</label>
+      <input id="file" type="file" accept=".txt,.pdf,text/plain,application/pdf" class="sr">
+      <button class="btn" id="clear" type="button">Clear</button>
+      <span class="note counter mono" id="count">0 chars</span>
+    </div>
+    <p class="note" style="margin:8px 0 0">Files are parsed in your browser. File bytes never leave this page; only extracted text is sent, and only to your local SafeRedline server.</p>
+    <div class="row">
+      <button class="btn primary" id="analyze" type="button">Analyze privately</button>
+      <span class="note" id="inputmsg" role="alert"></span>
+    </div>
+    <div id="stepper" aria-live="polite">
+      <div class="step" data-s="1"><span class="n">1</span><span>Attesting enclave (fresh nonce)</span></div>
+      <div class="step" data-s="2"><span class="n">2</span><span>Private inference in TEE</span></div>
+      <div class="step" data-s="3"><span class="n">3</span><span>Verifying enclave signature</span></div>
+    </div>
+    <div id="errbox"></div>
+  </div>
+
+  <div id="results" hidden>
+    <div class="card" id="analysis"></div>
+    <div class="card" style="margin-top:24px">
+      <h2>Ask a follow-up</h2>
+      <label class="lbl" for="q">Question about this contract (answered in the same verified enclave)</label>
+      <input type="text" id="q" maxlength="1000" placeholder="e.g. What is the worst-case liability exposure?">
+      <div class="row"><button class="btn" id="ask" type="button">Ask privately</button></div>
+      <div id="ask-err"></div>
+      <div id="ask-out"></div>
+    </div>
+  </div>
+</section>
+
+<aside>
+  <div class="card" id="trust">
+    <h2>Verified TEE</h2>
+    <div id="vbadge" class="vbadge idle">No attestation yet. Verify the enclave without sending any contract.</div>
+    <div class="row"><button class="btn" id="verifyonly" type="button">Verify enclave only</button><span class="note">No API key or contract needed</span></div>
+    <div id="tbody"></div>
+  </div>
+</aside>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha512-q+4liFwdPC/bNdhUpZx6aXDx/h77yEQtn4I1slHydcbZK34nLaR3cAeYSJshoxIOq3mjEf7xJE8YWIUHMn+oCQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+(function(){
+'use strict';
+var $=function(id){return document.getElementById(id)};
+function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=String(txt);return e}
+function clear(n){while(n.firstChild)n.removeChild(n.firstChild)}
+var source='paste', busy=false, health=null, gen=0;
+
+/* ---------- helpers ---------- */
+function copyText(t,btn){
+  var done=function(){var o=btn.textContent;btn.textContent='Copied';setTimeout(function(){btn.textContent=o},1500)};
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(done,fallback)}else fallback();
+  function fallback(){var ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done()}catch(e){}document.body.removeChild(ta)}
+}
+function hashEl(v,n){
+  if(!v)return el('span','note','n/a');
+  v=String(v);n=n||14;
+  var wrap=el('span');
+  if(v.length<=n*2+3){var s=el('span','mono',v);wrap.appendChild(s);return wrap}
+  var b=el('button','hash',v.slice(0,n)+'...'+v.slice(-6));b.type='button';b.title='Click to expand';
+  var open=false;b.addEventListener('click',function(){open=!open;b.textContent=open?v:v.slice(0,n)+'...'+v.slice(-6);b.classList.toggle('open',open)});
+  var c=el('button','btn sm copy','Copy');c.type='button';c.addEventListener('click',function(){copyText(v,c)});
+  wrap.appendChild(b);wrap.appendChild(c);return wrap;
+}
+function api(path,opts){
+  return fetch(path,opts).then(function(r){
+    return r.text().then(function(t){var j=null;try{j=JSON.parse(t)}catch(e){}
+      if(!r.ok){var err=(j&&j.error)||{code:'INTERNAL',message:'Unexpected server response ('+r.status+')',stage:'server',contractSent:false};
+        var e2=new Error(err.message);e2.info=err;e2.attestation=j&&j.attestation;throw e2}
+      if(j==null)throw Object.assign(new Error('Server returned invalid JSON'),{info:{code:'INTERNAL',message:'Server returned invalid JSON',stage:'server',contractSent:false}});
+      return j});
+  },function(){throw Object.assign(new Error('Cannot reach the local SafeRedline server.'),{info:{code:'NETWORK',message:'Cannot reach the local SafeRedline server.',stage:'server',contractSent:false}})});
+}
+
+/* ---------- health + samples ---------- */
+api('/api/health').then(function(h){
+  health=h;
+  var m=$('hmode');m.textContent=(h.mode==='twin'?'twin':'live')+' | '+h.model;
+  if(h.mode==='twin')$('twin').classList.add('on');
+  if(!h.apiKeyConfigured&&h.mode!=='twin'){$('inputmsg').textContent='No NEAR API key configured: analysis unavailable, but you can still verify the enclave.'}
+}).catch(function(){$('hmode').textContent='server unreachable'});
+api('/api/samples').then(function(list){
+  var box=$('samples');clear(box);box.appendChild(el('span','note','Try a fictional sample:'));
+  list.forEach(function(s){
+    var b=el('button','btn',s.title+(s.riskHint?' ('+s.riskHint+')':''));b.type='button';
+    b.addEventListener('click',function(){$('text').value=s.text;source='sample';wipeResults();upd()});
+    box.appendChild(b)});
+}).catch(function(){clear($('samples'));$('samples').appendChild(el('span','note','Samples unavailable.'))});
+
+function upd(){$('count').textContent=$('text').value.length.toLocaleString()+' chars'}
+$('text').addEventListener('input',function(){source='paste';upd()});
+
+/* ---------- file upload ---------- */
+$('file').addEventListener('change',function(ev){
+  var f=ev.target.files&&ev.target.files[0];ev.target.value='';
+  if(!f)return;
+  var msg=$('inputmsg');msg.textContent='';
+  var isPdf=/\.pdf$/i.test(f.name)||f.type==='application/pdf';
+  if(isPdf){
+    if(!window.pdfjsLib){msg.textContent='PDF support failed to load (offline?). Paste the text instead.';return}
+    msg.textContent='Reading PDF in your browser...';
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    var fr=new FileReader();
+    fr.onload=function(){
+      pdfjsLib.getDocument({data:new Uint8Array(fr.result)}).promise.then(function(doc){
+        var out=[],p=Promise.resolve();
+        for(var i=1;i<=doc.numPages;i++)(function(i){p=p.then(function(){return doc.getPage(i)}).then(function(pg){return pg.getTextContent()}).then(function(tc){
+          var s='';tc.items.forEach(function(it){s+=it.str;if(it.hasEOL)s+='\n'});out.push(s)})})(i);
+        return p.then(function(){return out.join('\n\n')});
+      }).then(function(t){
+        t=t.trim();
+        if(t.length<20){msg.textContent='Scanned PDF, paste text instead (no text layer found).';return}
+        $('text').value=t;source='pdf';wipeResults();upd();msg.textContent='Loaded '+f.name+' (parsed in your browser).';
+      }).catch(function(){msg.textContent='Could not read that PDF. Paste the text instead.'});
+    };
+    fr.onerror=function(){msg.textContent='Could not read that file.'};
+    fr.readAsArrayBuffer(f);
+  }else{
+    var r=new FileReader();
+    r.onload=function(){$('text').value=String(r.result);source='txt';wipeResults();upd();msg.textContent='Loaded '+f.name+'.'};
+    r.onerror=function(){msg.textContent='Could not read that file.'};
+    r.readAsText(f);
+  }
+});
+
+/* ---------- clear ---------- */
+function wipeResults(){
+  gen++;
+  clear($('analysis'));clear($('errbox'));clear($('ask-out'));clear($('ask-err'));$('q').value='';
+  $('results').hidden=true;$('stepper').classList.remove('on');setSteps(0);
+}
+$('clear').addEventListener('click',function(){
+  $('text').value='';source='paste';$('inputmsg').textContent='';wipeResults();upd();
+  clear($('tbody'));var vb=$('vbadge');vb.className='vbadge idle';vb.textContent='No attestation yet. Verify the enclave without sending any contract.';
+});
+
+/* ---------- stepper ---------- */
+function setSteps(active,failed){
+  var steps=document.querySelectorAll('.step');
+  for(var i=0;i<steps.length;i++){var n=i+1;steps[i].className='step'+(failed===n?' fail':(n<active?' done':(n===active?' active':'')))}
+}
+
+/* ---------- trust panel ---------- */
+var GROUPS=[['gateway','Gateway enclave (Intel TDX)'],['model','Model enclave (Intel TDX)'],['gpu','NVIDIA GPU confidential computing'],['signature','Response signature'],['info','Informational']];
+function renderTrust(att,sig,verified,opts){
+  opts=opts||{};
+  var vb=$('vbadge'),body=$('tbody');clear(body);clear(vb);
+  var ok=sig?!!verified:!!(att&&att.verified);
+  var warnTcb=att&&att.tcbStatus&&att.tcbStatus!=='UpToDate';
+  if(ok){
+    vb.className='vbadge '+(warnTcb?'warn':'ok');
+    vb.appendChild(document.createTextNode(sig?'Hardware TEE verified, zero data retention':'Enclave verified'));
+    if(!sig){var s0=el('span','sub','Attestation only. No contract was sent.');vb.appendChild(s0)}
+    if(warnTcb)vb.appendChild(el('span','sub','Warning: TCB status is '+att.tcbStatus+' (not UpToDate).'));
+  }else{
+    vb.className='vbadge bad';
+    vb.appendChild(document.createTextNode(sig?'UNVERIFIED RESPONSE':'UNVERIFIED'));
+    vb.appendChild(el('span','sub',sig?'The answer could not be proven to come from the attested enclave. Do not rely on it.':'The enclave failed verification.'));
+  }
+  if(opts.notSent){var ns=el('div','vbadge bad',null);ns.style.marginTop='10px';ns.textContent='Contract NOT sent';ns.appendChild(el('span','sub','Verification failed before any contract text left this machine.'));body.appendChild(ns)}
+  if(!att)return;
+  var big=el('div','bignum');
+  var nChecks=att.checks.concat(sig?sig.checks:[]);
+  var passed=nChecks.filter(function(c){return c.pass}).length;
+  var s1=el('div','stat',passed+'/'+nChecks.length);s1.appendChild(el('small',null,'checks passed'));big.appendChild(s1);
+  if(att.gpuCount!=null){var s2=el('div','stat',att.gpuCount);s2.appendChild(el('small',null,'GPUs in CC mode'));big.appendChild(s2)}
+  body.appendChild(big);
+
+  var kv=el('dl','kv');
+  function add(k,v){kv.appendChild(el('dt',null,k));var d=el('dd');if(v instanceof Node)d.appendChild(v);else d.textContent=v==null?'n/a':v;kv.appendChild(d)}
+  add('Fresh nonce',hashEl(att.nonce,10));
+  add('Model',el('span','mono',att.model||'n/a'));
+  add('Signing key(s)',(function(){var w=el('span');(att.signingAddresses||[]).forEach(function(a){var d=el('div');d.appendChild(hashEl(a,8));w.appendChild(d)});if(!(att.signingAddresses||[]).length)w.textContent='none';return w})());
+  add('Compose hash',hashEl(att.composeHash,10));
+  if(att.measurement){add('MRTD',hashEl(att.measurement.mrtd,10));add('RTMR3',hashEl(att.measurement.rtmr3,10))}
+  add('Hardware',att.hardware);
+  var tcb=el('span',null,att.tcbStatus||'n/a');if(warnTcb)tcb.className='tag warn';add('TCB status',tcb);
+  add('Verified at',att.verifiedAt?new Date(att.verifiedAt).toLocaleString()+' ('+att.ms+' ms)':'n/a');
+  if(sig){add('Request SHA-256',hashEl(sig.requestSha256,10));add('Response SHA-256',hashEl(sig.responseSha256,10))}
+  body.appendChild(kv);
+
+  var list=el('div');body.appendChild(list);
+  var all=att.checks.map(function(c){return c}).concat(sig?sig.checks.map(function(c){return Object.assign({},c,{scope:c.scope||'signature'})}):[]);
+  var order=[],seen={};
+  GROUPS.forEach(function(g){seen[g[0]]=1});
+  var delay=0;
+  GROUPS.forEach(function(g){
+    var items=all.filter(function(c){return (seen[c.scope]?c.scope:'info')===g[0]});
+    if(!items.length)return;
+    var grp=el('div','grp');grp.appendChild(el('h4',null,g[1]));list.appendChild(grp);
+    items.forEach(function(c){
+      var row=el('div','chk '+(c.scope==='info'&&c.pass?'info':(c.pass?'pass':'fail')));
+      row.style.animationDelay=delay+'ms';row.style.opacity='0';row.style.animationFillMode='both';delay+=60;
+      row.appendChild(el('span','ic',c.pass?'✓':'✗'));
+      var t=el('div');t.appendChild(el('span','lb',c.label||c.id));if(c.detail)t.appendChild(el('span','dt',c.detail));row.appendChild(t);
+      grp.appendChild(row);
+    });
+  });
+  // reveal after delay so animation staggers (opacity restored by animation)
+  var rows=list.querySelectorAll('.chk');for(var i=0;i<rows.length;i++)rows[i].style.opacity='';
+  if(sig||opts.retention){body.appendChild(el('div','retention','0 bytes written to disk. Nothing stored. Memory freed on response.'))}
+}
+
+/* ---------- errors ---------- */
+function showError(box,e){
+  clear(box);var i=e.info||{code:'INTERNAL',message:e.message,stage:'server',contractSent:false};
+  var a=el('div','alert '+(i.stage==='config'?'amber':'red'));a.setAttribute('role','alert');
+  a.appendChild(document.createTextNode(i.message||'Something went wrong'));
+  var sub=el('div','sub mono');sub.textContent=i.code+' | stage: '+i.stage;a.appendChild(sub);
+  var ns=el('div','sub');ns.textContent=i.contractSent?'Your contract WAS sent to the enclave before this failure. No output is trusted.':'Contract NOT sent. Nothing left this machine.';ns.style.fontWeight='700';a.appendChild(ns);
+  box.appendChild(a);
+  return i;
+}
+
+/* ---------- analyze ---------- */
+function setBusy(b){busy=b;$('analyze').disabled=b;$('ask').disabled=b;$('verifyonly').disabled=b}
+function validate(){
+  var t=$('text').value.trim();
+  if(t.length<50){$('inputmsg').textContent='Contract text must be at least 50 characters.';return null}
+  if(t.length>512*1024){$('inputmsg').textContent='Contract is too large (max 512K characters).';return null}
+  $('inputmsg').textContent='';return t;
+}
+$('analyze').addEventListener('click',function(){
+  if(busy)return;var t=validate();if(!t)return;
+  wipeResults();var my=gen;setBusy(true);
+  $('stepper').classList.add('on');setSteps(1);
+  // server does all stages in one request; advance indicator on a timer, snap to final state on response
+  var t2=setTimeout(function(){if(my===gen)setSteps(2)},1500);
+  api('/api/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:t,source:source})}).then(function(r){
+    clearTimeout(t2);if(my!==gen)return;
+    if(r.verified){setSteps(3);setTimeout(function(){if(my===gen)setSteps(4)},400)}else setSteps(0,3);
+    renderTrust(r.attestation,r.signature,r.verified);
+    renderAnalysis(r);
+    $('results').hidden=false;
+  }).catch(function(e){
+    clearTimeout(t2);if(my!==gen)return;
+    var i=showError($('errbox'),e);
+    var stage=({attestation:1,config:1,input:1,inference:2,signature:3})[i.stage]||1;
+    setSteps(0,stage);
+    if(e.attestation)renderTrust(e.attestation,null,false,{notSent:!i.contractSent});
+    else if(i.stage==='attestation'||i.code==='ATTESTATION_UNAVAILABLE'){var vb=$('vbadge');clear(vb);clear($('tbody'));vb.className='vbadge bad';vb.textContent='UNVERIFIED';vb.appendChild(el('span','sub',i.message));if(!i.contractSent){var ns=el('div','vbadge bad','Contract NOT sent');ns.style.marginTop='10px';$('tbody').appendChild(ns)}}
+    else if(i.stage==='inference'||i.stage==='signature'){/* leave previous trust panel */}
+  }).then(function(){setBusy(false)});
+});
+
+function renderAnalysis(r){
+  var box=$('analysis');clear(box);var a=r.analysis||{};
+  box.appendChild(el('h2',null,'2. Redline report'));
+  if(!r.verified){var w=el('div','alert red','UNVERIFIED RESPONSE: this output could not be proven to come from the attested enclave. Treat it as untrusted.');w.setAttribute('role','alert');box.appendChild(w)}
+  if(r.analysisParseError){box.appendChild(el('div','alert amber','The model did not return structured JSON, so no clause cards could be built. Try again.'))}
+  if(r.jsonMode==='prompt-only'){var jm=el('div','note','Model used prompt-only JSON mode.');jm.style.marginTop='8px';box.appendChild(jm)}
+  var bar=el('div','riskbar');bar.style.marginTop='12px';
+  var risk=['High','Medium','Low'].indexOf(a.overall_risk)>=0?a.overall_risk:'Unknown';
+  bar.appendChild(el('div','risk '+risk,risk+' risk'));
+  var fc=(a.flagged_clauses||[]);
+  var s1=el('div','stat',fc.length);s1.appendChild(el('small',null,'flagged clauses'));bar.appendChild(s1);
+  var s2=el('div','stat',(a.missing_protections||[]).length);s2.appendChild(el('small',null,'missing protections'));bar.appendChild(s2);
+  box.appendChild(bar);
+  if(a.executive_summary)box.appendChild(el('p','summary',a.executive_summary));
+  fc.forEach(function(c){
+    var lvl=c.risk_level==='Medium'?'Medium':'High';
+    var k=el('div','clause '+lvl);
+    var h=el('div','head');h.appendChild(el('h3',null,c.clause_title||'Clause'));
+    var tg=el('span',null);tg.appendChild(el('span','tag '+lvl,lvl+' risk'));
+    if(c.quoteFound===false){var nf=el('span','tag warn','Not found verbatim');nf.style.marginLeft='6px';nf.title='The model may have paraphrased or invented this quote. Check the source.';tg.appendChild(nf)}
+    h.appendChild(tg);k.appendChild(h);
+    k.appendChild(el('div','lab','Original text'));k.appendChild(el('div','quote',c.original_text));
+    k.appendChild(el('div','lab','Why it is risky'));k.appendChild(el('div','why',c.why_its_risky));
+    var lr=el('div','head');lr.style.marginTop='14px';lr.appendChild(el('div','lab','Suggested redline'));lr.firstChild.style.margin='0';
+    var cb=el('button','btn sm','Copy');cb.type='button';cb.addEventListener('click',function(){copyText(c.suggested_redline||'',cb)});lr.appendChild(cb);
+    k.appendChild(lr);k.appendChild(el('div','redline',c.suggested_redline));
+    box.appendChild(k);
+  });
+  var mp=a.missing_protections||[];
+  if(mp.length){box.appendChild(el('h3',null,'Missing standard protections')).style.marginTop='24px';var ul=el('ul','missing');mp.forEach(function(m){ul.appendChild(el('li',null,m))});box.appendChild(ul)}
+  if(!fc.length&&!mp.length&&!r.analysisParseError)box.appendChild(el('p','note','No flagged clauses or missing protections.'));
+}
+
+/* ---------- ask ---------- */
+$('ask').addEventListener('click',function(){
+  if(busy)return;var t=validate();if(!t)return;
+  var q=$('q').value.trim();if(!q){clear($('ask-err'));$('ask-err').appendChild(el('div','note','Enter a question.'));return}
+  clear($('ask-err'));clear($('ask-out'));var my=gen;setBusy(true);$('ask').textContent='Asking...';
+  api('/api/ask',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:t,question:q})}).then(function(r){
+    if(my!==gen)return;
+    renderTrust(r.attestation,r.signature,r.verified);
+    var o=$('ask-out');clear(o);
+    if(!r.verified)o.appendChild(el('div','alert red','UNVERIFIED RESPONSE: do not rely on this answer.'));
+    o.appendChild(el('div',null,r.answer));
+  }).catch(function(e){if(my!==gen)return;showError($('ask-err'),e);if(e.attestation)renderTrust(e.attestation,null,false,{notSent:!(e.info&&e.info.contractSent)})}).then(function(){setBusy(false);$('ask').textContent='Ask privately'});
+});
+
+/* ---------- verify only ---------- */
+$('verifyonly').addEventListener('click',function(){
+  if(busy)return;setBusy(true);$('verifyonly').textContent='Verifying...';
+  var vb=$('vbadge');clear($('tbody'));vb.className='vbadge idle';vb.textContent='Attesting enclave with a fresh nonce...';
+  api('/api/attest').then(function(att){renderTrust(att,null,att.verified)}).catch(function(e){
+    var i=e.info||{};vb.className='vbadge bad';clear(vb);vb.textContent='UNVERIFIED';vb.appendChild(el('span','sub',e.message+(i.code?' ('+i.code+')':'')));
+  }).then(function(){setBusy(false);$('verifyonly').textContent='Verify enclave only'});
+});
+upd();
+})();
+</script>
+</body>
+</html>
