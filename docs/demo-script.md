@@ -10,8 +10,8 @@ Setup before going on stage: `.env` has a valid key; `npm start` running; page o
 | 0:40 | Open the IP-assignment clause card (section 3). Read the quote, the risk, then the suggested redline. Click **Copy**. | "It caught that anything I say in meetings becomes theirs, without compensation, and drafted balanced replacement wording I can paste back." |
 | 1:00 | Glance at the other flags: perpetual term, uncapped indemnity, Cayman venue, one-sided definition. | "Five traps in a one-page NDA." |
 | 1:10 | Right panel, Verified TEE: point at the nonce. | "This nonce was generated fresh for this request. The Intel TDX hardware quote contains it, so this evidence can't be replayed." |
-| 1:25 | Point at the checks: Intel quote, debug off, compose hash, GPU verdict, then signature group. | "Intel TDX plus NVIDIA GPU confidential computing, every check green. And the answer itself was signed by a key proven to be inside that enclave." |
-| 1:40 | Click **Verify enclave only**; the nonce changes. | "No contract, no key needed: anyone can run this check themselves." |
+| 1:25 | Point at the checks: Intel quote, debug off, compose hash, GPU verdict, then signature group. | "Intel TDX plus NVIDIA GPU confidential computing, every counted check passing. And the answer itself was signed by a key proven to be inside that enclave." |
+| 1:40 | Click **Verify enclave only**; in live mode the nonce changes (in twin mode it is the recorded one). | "No contract, no key needed: anyone can run this check themselves." |
 | 1:50 | Closing line. | "Privacy you can check, not a promise you have to trust. SafeRedline: private contract review on NEAR AI Cloud." |
 
 ## Fallback (Wi-Fi or key failure)

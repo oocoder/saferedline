@@ -15,7 +15,7 @@ Attestation = {
   signingAddresses: string[], gatewaySigningAddress: string | null,
   gatewayTlsFingerprint: string | null,           // SPKI sha256 bound in the attested gateway quote
   appName: string | null, composeHash: string | null,
-  tcbStatus: string | null,                       // 'UpToDate' → green, else amber
+  tcbStatus: string | null,                       // 'UpToDate' → shown green, any other accepted status amber
   measurement: { mrtd: string, rtmr3: string, mrConfigId: string } | null,
   hardware: string, gpuCount: number | null,
   checks: Check[], verifiedAt: string /*ISO*/, ms: number
@@ -74,7 +74,7 @@ A signature failure is **not** an error. It returns 200 with `verified: false`.
 - **`GET /api/attest`** → `200 Attestation`. Returned even when `verified` is false; the UI shows the red checks. Needs no key. `503 ATTESTATION_UNAVAILABLE` only when the report itself can't be fetched.
 - **`POST /api/analyze`**
   - Request: `{ text: string /* 50..512KB chars, trimmed */, source?: 'paste' | 'txt' | 'pdf' | 'sample' }`. `source` is optional metadata; it is never logged.
-  - 200: `{ channel: Channel, verified: boolean /* attestation.verified && signature.verified */, analysis: Analysis, analysisParseError: boolean, jsonMode: 'native' | 'prompt-only', attestation: Attestation, signature: Signature, usage: object | null, model: string, retention: { bytesWrittenToDisk: 0, logged: false, storedContracts: 0 }, ms: number }`
+  - 200: `{ channel: Channel, verified: boolean /* attestation.verified && signature.verified */, analysis: Analysis, analysisParseError: boolean, jsonMode: 'native' | 'prompt-only', attestation: Attestation, signature: Signature, usage: object | null, model: string, retention: { persisted: false, enforcedBy: string }, ms: number }`
 - **`POST /api/ask`**
   - Request: `{ text: string /* 50..512KB */, question: string /* 1..1000 */ }`
   - 200: `{ channel: Channel, verified: boolean, answer: string, attestation: Attestation, signature: Signature, model: string, ms: number }`

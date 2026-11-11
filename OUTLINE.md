@@ -34,7 +34,7 @@ flowchart LR
 - Code and tests: backend, twin and offline tests complete (`npm test`, `npm run twin`); see `next.md` for phase status.
 - TLS pinning to the attested gateway key done; 97 tests.
 - Temporary: non-ASCII signature path awaiting live confirmation (ASCII-safe JSON on by default; `ASCII_SAFE_JSON=0` to disable).
-- Live attestation runs 22 checks (see README "Cryptographic verification").
+- Live attestation check list: see README "Cryptographic verification"; informational checks are shown but don't count.
 - Code freeze target 16:15 ET, demo 16:30 ET (Nov 11); submission closes Nov 14 23:59 UTC.
 
 ## Open items (from next.md "After demo", by Nov 14)

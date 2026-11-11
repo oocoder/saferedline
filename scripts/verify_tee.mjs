@@ -9,7 +9,7 @@ const { model: MODEL, apiKey: API_KEY } = cfg;
 const NEAR_BASE = deps.baseUrl;
 
 const attestOnly = process.argv.includes('--attest-only') || !API_KEY;
-const line = (c) => console.log(`  ${c.pass ? '\x1b[32m✔' : '\x1b[31m✘'}\x1b[0m ${c.label}  \x1b[2m${c.detail ?? ''}\x1b[0m`);
+const line = (c) => console.log(`  ${c.informational ? '\x1b[90mⓘ' : c.pass ? '\x1b[32m✔' : '\x1b[31m✘'}\x1b[0m ${c.label}  \x1b[2m${c.detail ?? ''}\x1b[0m`);
 
 const tee = await listTeeModels();
 console.log(`\nConfidential TEE models available (owned_by=nearai): ${tee.map((m) => m.id).join(', ')}`);
@@ -38,6 +38,10 @@ if (!attestOnly) {
 }
 
 console.log('\n──────── Summary ────────');
+const counted = att.checks.filter((c) => !c.informational);
+const info = att.checks.filter((c) => c.informational);
+console.log(`Counted checks:  ${counted.filter((c) => c.pass).length}/${counted.length} passed`);
+console.log(`Informational:   ${info.length ? info.map((c) => `${c.id} (${c.pass ? 'ok' : 'not satisfied'}: ${c.detail})`).join('; ') : 'none'}`);
 console.log(`Verified:        ${att.verified && sigOk}`);
 console.log(`Nonce:           ${att.nonce}`);
 console.log(`Model ID:        ${att.model}`);

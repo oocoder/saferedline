@@ -17,7 +17,7 @@ Founders and small legal teams who run SafeRedline **on their own machine** (the
 1. You load or paste a contract (`.txt`, text `.pdf`, or a bundled fictional sample).
 2. The local server fetches a fresh enclave attestation (bound to a new random nonce) and verifies it. If verification fails, **the contract is not sent**.
 3. The contract is analyzed by `z-ai/glm-5.3-flash` (a NEAR AI Cloud Confidential TEE model). You get an overall risk rating, flagged clauses (verbatim quote, why it is risky, copy-pasteable redline), and missing standard protections.
-4. The enclave's signature over the exact request and response bytes is checked against the attested key. The UI shows every check in a "Verified TEE" panel and turns red if any fails.
+4. The enclave's signature over the exact request and response bytes is checked against the attested key. The UI shows every check in a "Verified TEE" panel and turns red if any counted check fails.
 
 ## Quickstart
 
@@ -26,7 +26,7 @@ Requires Node >= 20. Steps are numbered "do X, you should see Y".
 1. `npm ci` -> installs 2 runtime dependencies (`ethers`, `@phala/dcap-qvl`); no errors.
 2. `npm test` -> all tests pass **offline** (recorded real attestation fixture plus a local twin of the NEAR API).
 3. `npm run twin` -> prints a localhost URL. Open it: the UI loads with a "TWIN MODE: simulated enclave, not a real TEE" banner. No API key needed. Click a sample, then **Analyze privately**.
-4. `npm run verify -- --attest-only` -> **live**, no key needed. Prints about 22 green check marks (Intel TDX quote, nonce binding, compose hash, RTMR3 replay, NVIDIA GPU verdict, ...) and ends with `Verified: true`.
+4. `npm run verify -- --attest-only` -> **live**, no key needed. Prints a green check mark per passing check (Intel TDX quote, nonce binding, compose hash, RTMR3 replay, NVIDIA GPU verdict, ...) and ends with `Verified: true`.
 5. `cp .env.example .env`, then set `NEAR_API_KEY=sk-...` (claim a key at https://nearbuilders.org/dashboard). `.env` is git-ignored.
 6. `npm start` -> prints `SafeRedline running -> http://127.0.0.1:3000`, `API key: configured`.
 7. `npm run verify` -> live attestation, one real private completion, and the response-signature checks; ends with `Verified: true`.
@@ -36,11 +36,12 @@ Requires Node >= 20. Steps are numbered "do X, you should see Y".
 | Do | You should see |
 |---|---|
 | `npm run twin`, open the URL | UI with the TWIN banner. Everything below also works here, but the enclave is simulated. |
-| Click **Load Predatory NDA**, then **Analyze privately** | Overall risk **High**; clause cards for one-sided confidentiality, perpetual term, IP assignment of feedback, uncapped indemnity, Cayman venue. |
-| Open the right-hand "Verified TEE" panel | A fresh 64-hex nonce, model id, signer address, compose hash, MRTD, TCB status, GPU count, and a grouped list of checks, all green. |
-| Click **Verify enclave only** | Calls `GET /api/attest` (no key needed in live mode); nonce changes every click. |
-| Live mode (`npm start` with a key): repeat the above | Same panel, but the checks ran against NEAR's real Intel TDX + NVIDIA evidence. |
-| Load the Balanced NDA | Overall risk **Low**, few or no flagged clauses (baseline comparison). |
+| Click **Load Predatory NDA**, then **Analyze privately** | Overall risk **High**; clause cards for one-sided confidentiality, perpetual term, IP assignment of feedback, uncapped indemnity, Cayman venue (twin: simulated, 5 named clauses; live: the real model's output). |
+| Open the right-hand "Verified TEE" panel | A 64-hex nonce, model id, signer address, compose hash, MRTD, TCB status, GPU count, and a grouped list of checks. Every counted check passes; informational checks (ⓘ) such as `measurement_pinning` are shown but don't count. In twin mode the nonce is the one from the RECORDED real attestation, so it does not change. |
+| Click **Verify enclave only** | Calls `GET /api/attest`. Live mode (`npm start`, or `npm run verify -- --attest-only`): a fresh nonce is generated on every call. Twin mode: the same recorded nonce each time (it replays recorded evidence). |
+| Live mode (`npm start` with a key): repeat the above | Same panel, but the checks ran against NEAR's real Intel TDX + NVIDIA evidence, and the analysis comes from the real model. |
+| Load the Balanced NDA | Overall risk **Low**, few or no flagged clauses (baseline comparison). Twin: simulated. |
+| Load the Contractor Agreement | Twin (simulated): High. Live: whatever the model returns. |
 | Tamper test (twin): `TWIN_SCRIPT=tampered_res npm run twin`, analyze | Panel turns red: **UNVERIFIED RESPONSE**. The signature no longer matches the bytes received. |
 | Failure test (twin): `TWIN_SCRIPT=attestation_failed npm run twin`, analyze | Red "Contract NOT sent". The model endpoint receives zero requests. |
 
@@ -66,7 +67,7 @@ Run per request, in this order, before and after the contract is sent. Any faile
 |---|---|
 | Fresh nonce generated per request (`crypto.randomBytes(32)`) | Evidence cannot be a replay of an old attestation. |
 | `nonce_echo`: enclave echoes our nonce | The report was produced for this request. |
-| `tdx_quote`: Intel TDX quote verified with `@phala/dcap-qvl` against Intel collateral | The evidence was signed by genuine Intel TDX hardware; TCB status is reported (green only for `UpToDate`). |
+| `tdx_quote`: Intel TDX quote verified with `@phala/dcap-qvl` against Intel collateral | The evidence was signed by genuine Intel TDX hardware; Passes for TCB status `UpToDate`, `SWHardeningNeeded`, `ConfigurationAndSWHardeningNeeded` or `OutOfDate` (same policy as NEAR's reference verifier); the UI shows amber unless `UpToDate`. |
 | `td_parse`: quote body parses as a TD report | The checks below really ran (no silent skip). |
 | `tdx_debug`: debug bit off | The enclave is a production VM, not a debuggable one whose memory the host could read. |
 | `rd_signer`: quote `report_data` binds the enclave signing address | The key that later signs responses lives inside the attested enclave. |
@@ -86,13 +87,13 @@ Run per request, in this order, before and after the contract is sent. Any faile
 | `sig_res`: signed response hash equals sha256 of the exact bytes received | The answer was not altered in transit. |
 | `tls_bound`: SPKI sha256 of the TLS leaf certificate equals the fingerprint bound in the attested gateway quote; enforced in the handshake before any contract byte is written | The endpoint that receives your plaintext is the attested gateway, not a relay in front of it. Mismatch gives `ATTESTATION_FAILED` and the contract is not sent. |
 | `measurement_pinning` (informational, not counted in `verified`) | Shows whether a known-good compose hash is pinned via `EXPECTED_COMPOSE_HASH`; off by default. |
-| `sig_algo`: signature algorithm is ECDSA | No algorithm downgrade. |
+| `sig_algo`: fails if a non-ECDSA algorithm is reported | ECDSA is also implied because the signature must EIP-191-recover to an attested address. |
 | `sig_ecdsa`: EIP-191 signature recovers to the signing address | The signature is valid. |
 | `sig_attested`: recovered address is in the set of keys attested above | The answer came from the attested enclave, not some other key. |
 | `sig_model`: signed model id equals the model we asked for | The enclave served the model we requested. |
 | `sig_fetch`: signature retrieved from the enclave | A missing signature is a failure, not a pass. |
 
-The authoritative check list is whatever `GET /api/attest` returns (22 checks live, since the model enclave, gateway enclave and GPU each contribute); ids are defined in `src/attest.mjs`. Design rationale: the architecture plan ([docs/plans/2026-11-11-architecture-plan.md](docs/plans/2026-11-11-architecture-plan.md)).
+The authoritative check list is whatever `GET /api/attest` returns (the model enclave, gateway enclave and GPU each contribute checks; informational ones are shown but don't count); ids are defined in `src/attest.mjs`. Design rationale: the architecture plan ([docs/plans/2026-11-11-architecture-plan.md](docs/plans/2026-11-11-architecture-plan.md)).
 
 ## The honest claim
 
@@ -108,13 +109,13 @@ The authoritative check list is whatever `GET /api/attest` returns (22 checks li
 - **Responses carry no per-request nonce.** Replay of a response only matters to a party that already holds the plaintext, so we treat it as out of scope; the attestation itself is nonce-bound.
 - Model output is untrusted text and can be wrong or hallucinated; `quoteFound` flags clauses whose quote is not verbatim in your contract. This is informational analysis, not legal advice.
 
-Details: [docs/threat-model.md](docs/threat-model.md).
+Details: [docs/threat-model.md](docs/threat-model.md); independent review: [docs/security-review.md](docs/security-review.md).
 
 ## Zero data retention
 
 Contract text and model output live only in local variables for the duration of one HTTP request. Links are to the code that enforces or demonstrates it (line numbers synced to the final commit):
 
-- No database, file writes, cache or session store in the server (only read-only loads of the UI and samples): [`src/server.mjs#L1-L16`](src/server.mjs#L1-L16)
+- No database, no user-data cache, no session store, no write paths in the server. Evidence: the sentinel test [`tests/pipeline.test.mjs#L195`](tests/pipeline.test.mjs#L195) asserts no writes and no content in logs or errors.
 - Request body read into a variable, dropped after use: [`src/server.mjs#L105`](src/server.mjs#L105) and [`#L114`](src/server.mjs#L114)
 - Logs are metadata only (method, path, status, ms); never content: [`src/server.mjs#L142-L143`](src/server.mjs#L142-L143)
 - `Cache-Control: no-store` and CSP `connect-src 'self'` (the page cannot send the contract anywhere but your localhost server): [`src/server.mjs#L42-L46`](src/server.mjs#L42-L46)
@@ -124,7 +125,7 @@ Contract text and model output live only in local variables for the duration of 
 - NVIDIA JWT verification: [`verifyJwt` `src/attest.mjs#L180`](src/attest.mjs#L180), [`gpuClaimProblems` `#L199`](src/attest.mjs#L199)
 - Response-signature verification (after inference): [`verifyResponseSignature` `src/attest.mjs#L422`](src/attest.mjs#L422); [`sig_req` L436](src/attest.mjs#L436), [`sig_model` L438](src/attest.mjs#L438), [`sig_attested` L444](src/attest.mjs#L444)
 - Attestation verifier entry points: [`verifyOne` `src/attest.mjs#L253`](src/attest.mjs#L253) (e.g. `rd_signer` [L290](src/attest.mjs#L290)), [`attestModel` `#L346`](src/attest.mjs#L346); the module performs no disk writes or content logging.
-- Test that proves it: a sentinel string `ZXQ-SECRET-7731` is analyzed and asserted absent from logs, error bodies and filesystem writes: [`tests/pipeline.test.mjs#L193`](tests/pipeline.test.mjs#L193)
+- Test that proves it: a sentinel string `ZXQ-SECRET-7731` is analyzed and asserted absent from logs, error bodies and filesystem writes: [`tests/pipeline.test.mjs#L195`](tests/pipeline.test.mjs#L195)
 - Local CSRF protection: Host/Origin allowlist (`ALLOWED_HOSTS` adds extra hosts) and JSON-only POST, so another web page cannot make your browser post to your local server: [`src/server.mjs#L124`](src/server.mjs#L124).
 - Browser: no `localStorage` of contract text; PDFs are parsed in the browser and only extracted text is sent.
 
@@ -140,7 +141,9 @@ Set in `.env` or the environment (see `.env.example`). Only `NEAR_API_KEY` is re
 | `PORT` | `3000` | Listen port |
 | `ALLOWED_HOSTS` | none | Extra Host header values accepted by the local server (CSRF/DNS-rebinding guard) |
 | `EXPECTED_COMPOSE_HASH` | unset | If set, the attested compose hash must equal it (`compose_pinned` check) |
-| `TLS_BOUND_STRICT` | on | Set `0` to make `tls_bound` informational (CDN/proxy in front of the TEE). Development only |
+| `TLS_BOUND_STRICT` | strict (counted) | Set `0` to make `tls_bound` informational (CDN/proxy in front of the TEE). Development only |
+| `ASCII_SAFE_JSON` | on | Set `0` to send non-ASCII characters raw in the request JSON instead of `\uXXXX` escapes (the signature hash covers the exact bytes sent) |
+| `NEAR_TIMEOUT_MS` | `90000` | Timeout for the inference call; exceeding it returns `INFERENCE_TIMEOUT` |
 | `ALLOW_ENDPOINT_OVERRIDE` | unset | Required (`1`) to redirect NEAR/Intel/NVIDIA endpoints via env; the server refuses otherwise, and `/api/health` shows a warning when active. Development only |
 
 ## Architecture
@@ -166,14 +169,14 @@ More: [docs/architecture.md](docs/architecture.md).
 
 - Runtime: [`ethers`](https://www.npmjs.com/package/ethers) (EIP-191 signature recovery), [`@phala/dcap-qvl`](https://www.npmjs.com/package/@phala/dcap-qvl) (Intel TDX quote verification). Node built-ins for everything else (`node:http`, `node:crypto`, `node:test`).
 - Browser: [pdf.js](https://mozilla.github.io/pdf.js/) 3.11.174 loaded from cdnjs (with SRI) for in-browser PDF text extraction. No other front-end dependencies.
-- No pre-hackathon code: no templates, boilerplate or earlier libraries. Everything in this repository was written on Nov 11 2026 during the event.
+- No pre-hackathon code, templates or boilerplate: built Nov 11 2026; see git history.
 - Sample contracts in `samples/` are entirely fictional (company names and terms invented).
 
 ## Sample documents (fictional)
 
 - [`samples/sample_predatory_nda.txt`](samples/sample_predatory_nda.txt): one-sided "mutual" NDA with perpetual term, IP assignment of feedback, uncapped indemnity, Cayman venue. Expected risk: High.
 - [`samples/sample_balanced_nda.txt`](samples/sample_balanced_nda.txt): standard mutual NDA. Expected risk: Low.
-- [`samples/sample_contractor_agreement.txt`](samples/sample_contractor_agreement.txt): contractor agreement; also used as the non-ASCII (smart quotes, section sign) signature test input.
+- [`samples/sample_contractor_agreement.txt`](samples/sample_contractor_agreement.txt): contractor agreement; contains non-ASCII characters (smart quotes, section sign) so the live signature check exercises non-ASCII bytes; an offline test also covers non-ASCII request bytes.
 
 ## Positioning (not a verified benchmark)
 
