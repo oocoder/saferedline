@@ -11,7 +11,7 @@
     "start": "node src/server.mjs",
     "verify": "node scripts/verify_tee.mjs",
     "test": "node --test tests/*.test.mjs",
-    "twin": "SAFEREDLINE_TWIN=1 node src/server.mjs",
+    "twin": "node scripts/twin.mjs",
     "record": "node scripts/record_fixtures.mjs",
     "check:docs": "node scripts/check_docs.mjs",
     "prove": "node scripts/verify_tee.mjs --json",

@@ -75,7 +75,7 @@ describe('HTTP surface', () => {
 
 describe('process', () => {
   test('npm run twin entry binds 127.0.0.1 by default and importing server.mjs does not listen (#19, #20)', async () => {
-    const child = spawn(process.execPath, ['src/server.mjs'], { cwd: ROOT, env: { ...process.env, PORT: '0', SAFEREDLINE_TWIN: '1', TWIN_SCRIPT: 'ok', HOST: '' } });
+    const child = spawn(process.execPath, ['scripts/twin.mjs'], { cwd: ROOT, env: { ...process.env, PORT: '0', SAFEREDLINE_TWIN: '1', TWIN_SCRIPT: 'ok', HOST: '' } });
     try {
       const url = await new Promise((resolve, reject) => {
         let buf = '';
@@ -93,7 +93,7 @@ describe('process', () => {
     } finally { child.kill(); }
   });
   test('unknown TWIN_SCRIPT is rejected with the list of valid values', async () => {
-    const child = spawn(process.execPath, ['src/server.mjs'], { cwd: ROOT, env: { ...process.env, PORT: '0', SAFEREDLINE_TWIN: '1', TWIN_SCRIPT: 'bogus' } });
+    const child = spawn(process.execPath, ['scripts/twin.mjs'], { cwd: ROOT, env: { ...process.env, PORT: '0', SAFEREDLINE_TWIN: '1', TWIN_SCRIPT: 'bogus' } });
     let err = ''; child.stderr.on('data', (d) => (err += d));
     const code = await new Promise((r) => child.on('exit', r));
     assert.notEqual(code, 0);

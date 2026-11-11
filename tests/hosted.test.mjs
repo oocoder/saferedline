@@ -128,7 +128,7 @@ describe('HOSTED_DEMO: bind policy (process)', () => {
   });
   test('HOSTED_DEMO with explicit HOST=0.0.0.0 + ALLOWED_HOSTS starts and reports hosted-demo; unset HOST stays on loopback', async () => {
     for (const [env2, expectBind] of [[{ HOST: '0.0.0.0', ALLOWED_HOSTS: 'demo.example.org' }, '0.0.0.0'], [{ HOST: '' }, '127.0.0.1']]) {
-      const child = spawn(process.execPath, ['src/server.mjs'], { cwd: ROOT, env: { ...process.env, PORT: '0', SAFEREDLINE_ENV_FILE: '/nonexistent', SAFEREDLINE_TWIN: '1', HOSTED_DEMO: '1', ...env2 } });
+      const child = spawn(process.execPath, ['scripts/twin.mjs'], { cwd: ROOT, env: { ...process.env, PORT: '0', SAFEREDLINE_ENV_FILE: '/nonexistent', SAFEREDLINE_TWIN: '1', HOSTED_DEMO: '1', ...env2 } });
       try {
         const port = await new Promise((res, rej) => { let b = ''; setTimeout(() => rej(new Error(b)), 8000); child.stdout.on('data', (d) => { b += d; const m = b.match(/http:\/\/[\d.]+:(\d+)/); if (m) res(m[1]); }); });
         const r = await rawReq(`http://127.0.0.1:${port}`, { headers: env2.ALLOWED_HOSTS ? { Host: 'demo.example.org' } : {} });

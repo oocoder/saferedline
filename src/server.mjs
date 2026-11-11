@@ -291,20 +291,14 @@ export function createServer(opts = {}) { return http.createServer(createHandler
 
 function fail(m) { console.error(`\n  ${m}\n`); process.exit(1); }
 
-async function main() {
+/** Start the local/self-hosted server (live mode). Twin mode is started by scripts/twin.mjs, never from here. */
+export function startServer({ mode = 'live' } = {}) {
   const PORT = process.env.PORT === undefined ? 3000 : Number(process.env.PORT);
   const hostedDemo = process.env.HOSTED_DEMO === '1';
   const HOST = process.env.HOST || '127.0.0.1';
   const loopback = ['127.0.0.1', 'localhost', '::1'].includes(HOST);
   if (!loopback && !hostedDemo) fail(`Refusing to bind ${HOST}: SafeRedline is loopback-only unless HOSTED_DEMO=1 (public demo of bundled samples).`);
   if (hostedDemo && !loopback && !process.env.ALLOWED_HOSTS) fail('HOSTED_DEMO on a public bind needs ALLOWED_HOSTS=<your public hostname> (Host-header allowlist).');
-  let mode = 'live';
-  if (process.env.SAFEREDLINE_TWIN) {
-    const twinModule = '../tests/twin/install.mjs'; // non-literal: keeps bundlers/tracers from pulling tests into serverless builds
-    const { installTwin, resolveScript } = await import(twinModule);
-    await installTwin({ script: resolveScript(process.env.TWIN_SCRIPT) });
-    mode = 'twin';
-  }
   const server = createServer({ mode, host: HOST, hostedDemo, trustProxy: process.env.TRUST_PROXY === '1' });
   server.listen(PORT, HOST, () => {
     const { port } = server.address();
@@ -318,6 +312,10 @@ async function main() {
     if (hostedDemo) console.log('  HOSTED DEMO: bundled fictional samples only; per-IP + daily rate limits (in memory)');
     console.log('  Persistence: none (no disk, no DB, no content logging)\n');
   });
+  return server;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  if (process.env.SAFEREDLINE_TWIN) fail('Twin mode is started with `npm run twin` (scripts/twin.mjs), not from src/server.mjs.');
+  startServer();
+}
