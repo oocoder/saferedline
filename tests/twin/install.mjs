@@ -21,6 +21,10 @@ export const TWIN_SCRIPTS = {
   attestation_unavailable: { attestation: '503' },
   nras_down: { nras: '503' },
   nras_bad_shape: { nras: 'bad_shape' },
+  no_model_prefix: { signature: 'no_model_prefix' },
+  nras_bad_jwt_sig: { nras: 'bad_jwt_sig' },
+  nras_no_gpus: { nras: 'no_gpus' },
+  nras_unknown_key: { jwks: 'empty' },
   missing_gateway: { attestation: 'missing_gateway' },
   bom_body: { chat: 'bom_body' },
   connection_drop: { chat: 'drop' },
@@ -46,12 +50,13 @@ export async function installTwin({ script = {}, apiKey = 'sk-twin-test-key', ti
   const { timeoutMs: scriptTimeout, ...s } = script;
   twin.script = s;
   setDeps({
-    baseUrl: twin.url, nrasUrl: twin.nrasUrl,
+    baseUrl: twin.url, nrasUrl: twin.nrasUrl, jwksUrl: twin.jwksUrl,
     getCollateral: async (_u, q) => {
       const c = fixture.collateral[sha256hex(q)];
       if (!c) throw new Error('no recorded collateral for quote');
       return c;
     },
+    getTlsFingerprint: async () => fixture.tlsFingerprint,
     nowSec: () => fixture.recordedAt,
     newNonce: () => fixture.nonce,
     timeouts: { attest: 5000, pccs: 5000, nras: 5000, signature: 5000 },
