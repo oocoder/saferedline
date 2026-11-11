@@ -3,7 +3,7 @@
 // variables for the lifetime of one call. Nothing is logged, cached or written.
 
 import './env.mjs'; // must stay first: loads .env before config below reads process.env
-import { deps, attestModel, verifyResponseSignature } from './attest.mjs';
+import { deps, attestModel, verifyResponseSignature, canPin } from './attest.mjs';
 import { AppError } from './errors.mjs';
 
 // Injectable config (tests / twin). Confidential TEE models are owned_by === "nearai" in GET /v1/models.
@@ -92,17 +92,21 @@ export function normalizeAnalysis(a, contractText) {
 
 const asciiJson = (o) => JSON.stringify(o).replace(/[\u007f-￿]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 
-async function post(requestBody) {
+async function post(requestBody, pin) {
   let res;
   try {
-    res = await deps.fetch(`${deps.baseUrl}/chat/completions`, {
+    const url = `${deps.baseUrl}/chat/completions`;
+    const opts = {
       method: 'POST',
       headers: { Authorization: `Bearer ${cfg.apiKey}`, 'Content-Type': 'application/json' },
       body: requestBody,
       signal: AbortSignal.timeout(cfg.timeoutMs),
-    });
+    };
+    // Pinned: the TLS handshake aborts (before any byte of the body is written) unless the certificate matches the attested gateway.
+    res = pin && canPin(url) ? await deps.pinnedFetch(url, opts, pin) : await deps.fetch(url, opts);
     return { res, raw: Buffer.from(await res.arrayBuffer()) }; // exact bytes the enclave signs
   } catch (e) {
+    if (e?.code === 'TLS_PIN_MISMATCH') throw new AppError('TLS certificate does not match the attested gateway — contract NOT sent', { status: 502, code: 'ATTESTATION_FAILED', stage: 'attestation', contractSent: false });
     if (e?.name === 'TimeoutError' || e?.name === 'AbortError') {
       throw new AppError(`The model did not answer within ${Math.round(cfg.timeoutMs / 1000)}s`, { status: 504, code: 'INFERENCE_TIMEOUT', stage: 'inference', contractSent: true });
     }
@@ -111,7 +115,7 @@ async function post(requestBody) {
 }
 
 /** One private chat completion. Returns the EXACT request/response bytes for signature checks. */
-async function chat(messages, { maxTokens = 4000, json = false } = {}) {
+async function chat(messages, { maxTokens = 4000, json = false, pin = null } = {}) {
   const build = (useJson) => {
     const payload = {
       model: cfg.model, messages, max_tokens: maxTokens, temperature: 0.2,
@@ -122,14 +126,14 @@ async function chat(messages, { maxTokens = 4000, json = false } = {}) {
   };
   let jsonMode = json ? 'native' : 'prompt-only';
   let requestBody = build(json);
-  let { res, raw } = await post(requestBody);
+  let { res, raw } = await post(requestBody, pin);
   if (res.status === 400 && json) {
     let msg = '';
     try { msg = JSON.parse(raw.toString('utf8')).error?.message || ''; } catch { /* ignore */ }
     if (/response_format|json/i.test(msg)) {
       jsonMode = 'prompt-only';
       requestBody = build(false); // a NEW request -> new bytes -> new signature, which we verify as usual
-      ({ res, raw } = await post(requestBody));
+      ({ res, raw } = await post(requestBody, pin));
     }
   }
   if (!res.ok) {
@@ -178,8 +182,10 @@ async function attestOrThrow() {
 
 const sigArgs = (r, attestation) => ({
   chatId: r.body.id, model: cfg.model, requestBody: Buffer.from(r.requestBody, 'utf8'), responseBody: r.raw,
-  apiKey: cfg.apiKey, attestedSigners: attestation.signingAddresses,
+  apiKey: cfg.apiKey, attestedSigners: attestation.signingAddresses, pin: pinOf(attestation),
 });
+const pinOf = (a) => (canPin(deps.baseUrl) ? a.gatewayTlsFingerprint || null : null);
+const channelOf = (a) => ({ tlsPinned: !!pinOf(a), fingerprint: pinOf(a), note: canPin(deps.baseUrl) ? (pinOf(a) ? 'chat and signature requests went only to a TLS endpoint matching the attested gateway key' : 'no attested TLS fingerprint; connection NOT pinned') : 'plain http (twin/dev): pinning skipped' });
 
 /** Full private pipeline: attest (fresh nonce) -> infer in TEE -> verify response signature. */
 export async function analyzeContract(contractText) {
@@ -189,7 +195,7 @@ export async function analyzeContract(contractText) {
   const r = await chat([
     { role: 'system', content: SYSTEM_PROMPT },
     { role: 'user', content: `CONTRACT TEXT:\n\n${contractText}` },
-  ], { json: true });
+  ], { json: true, pin: pinOf(attestation) });
   let parsed, analysisParseError = false;
   try { parsed = extractJson(r.content); } catch {
     analysisParseError = true;
@@ -200,7 +206,7 @@ export async function analyzeContract(contractText) {
   return {
     verified: attestation.verified && signature.verified,
     analysis, analysisParseError, jsonMode: r.jsonMode,
-    attestation, signature,
+    attestation, signature, channel: channelOf(attestation),
     usage: r.body.usage ?? null,
     model: cfg.model,
     retention: { bytesWrittenToDisk: 0, logged: false, storedContracts: 0 },
@@ -215,11 +221,11 @@ export async function askFollowUp(contractText, question) {
   const r = await chat([
     { role: 'system', content: FOLLOWUP_PROMPT_TEXT },
     { role: 'user', content: `CONTRACT:\n${contractText}\n\nQUESTION: ${question}` },
-  ], { maxTokens: 600 });
+  ], { maxTokens: 600, pin: pinOf(attestation) });
   const signature = await signatureWithRetry(sigArgs(r, attestation));
   return {
     verified: attestation.verified && signature.verified,
     answer: r.content.replace(/<think>[\s\S]*?<\/think>/g, '').trim(),
-    attestation, signature, model: cfg.model, ms: Date.now() - t0,
+    attestation, signature, channel: channelOf(attestation), model: cfg.model, ms: Date.now() - t0,
   };
 }
