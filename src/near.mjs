@@ -209,7 +209,7 @@ export async function analyzeContract(contractText) {
     attestation, signature, channel: channelOf(attestation),
     usage: r.body.usage ?? null,
     model: cfg.model,
-    retention: { bytesWrittenToDisk: 0, logged: false, storedContracts: 0 },
+    retention: { persisted: false, enforcedBy: 'no write paths in src/; sentinel test tests/pipeline.test.mjs' },
     ms: Date.now() - t0,
   };
 }

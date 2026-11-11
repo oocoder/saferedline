@@ -20,7 +20,7 @@ describe('POST /api/analyze happy paths', () => {
     assert.equal(j.attestation.verified, true);
     assert.equal(j.analysisParseError, false);
     assert.equal(j.jsonMode, 'native');
-    assert.deepEqual(j.retention, { bytesWrittenToDisk: 0, logged: false, storedContracts: 0 });
+    assert.deepEqual(j.retention, { persisted: false, enforcedBy: 'no write paths in src/; sentinel test tests/pipeline.test.mjs' });
     assert.equal(j.analysis.flagged_clauses[0].quoteFound, true);
     assert.equal(j.analysis.flagged_clauses[1].quoteFound, false);
     for (const k of ['chatId', 'requestSha256', 'responseSha256', 'signingAddress', 'signingAlgo', 'text', 'checks']) assert.ok(k in j.signature, k);
@@ -64,12 +64,14 @@ describe('POST /api/analyze happy paths', () => {
     assert.equal(r.status, 200, r.raw.slice(0, 200));
     assert.equal(r.json.verified, true);
   });
-  test('non-ASCII contract: ASCII-safe JSON on the wire, signature verifies (#10)', async () => {
+  test('non-ASCII contract (real sample file): ASCII-safe JSON on the wire, signature verifies (#10)', async () => {
     env = await boot();
-    const r = await analyze();
+    const sample = fs.readFileSync(new URL('../samples/sample_contractor_agreement.txt', import.meta.url), 'utf8');
+    assert.ok(/[^\x00-\x7f]/.test(sample), 'sample must contain non-ASCII characters');
+    const r = await analyze(sample);
     const [sent] = [...env.twin.store.values()];
     assert.ok(sent.req.every((b) => b < 0x80), 'request is pure ASCII');
-    assert.ok(sent.req.toString('utf8').includes('\\u201c'));
+    assert.ok(sent.req.toString('utf8').includes('\\u201c') && sent.req.toString('utf8').includes('\\u00fa'), 'curly quote and ú escaped');
     assert.equal(r.json.signature.verified, true);
     assert.equal(r.json.signature.checks.find((c) => c.id === 'sig_req').pass, true);
   });
@@ -237,5 +239,34 @@ describe('unit', () => {
     env = await boot();
     setDeps({ fetch: async () => new Response('x', { status: 500 }) });
     await assert.rejects(listTeeModels(), (e) => e.code === 'INFERENCE_FAILED');
+  });
+});
+
+describe('twin: sample-aware analyses', () => {
+  const sampleText = (id) => fs.readFileSync(new URL(`../samples/${id}.txt`, import.meta.url), 'utf8');
+  const expectations = [
+    ['sample_predatory_nda', 'High', 5, 3],
+    ['sample_balanced_nda', 'Low', 0, 1],
+    ['sample_contractor_agreement', 'High', 7, 4],
+  ];
+  for (const [id, risk, flagged, missing] of expectations) {
+    test(`${id}: ${risk}, ${flagged} flagged, every quote verbatim`, async () => {
+      env = await boot();
+      const r = await analyze(sampleText(id));
+      assert.equal(r.status, 200);
+      assert.equal(r.json.verified, true);
+      const a = r.json.analysis;
+      assert.equal(a.overall_risk, risk);
+      assert.equal(a.flagged_clauses.length, flagged);
+      assert.equal(a.missing_protections.length, missing);
+      assert.ok(a.flagged_clauses.every((c) => c.quoteFound), 'all quotes appear verbatim: ' + a.flagged_clauses.filter((c) => !c.quoteFound).map((c) => c.clause_title));
+      assert.ok(a.executive_summary.startsWith('[Simulated twin output] '));
+    });
+  }
+  test('unrecognized text gets the prefixed generic analysis', async () => {
+    env = await boot();
+    const r = await analyze();
+    assert.ok(r.json.analysis.executive_summary.startsWith('[Simulated twin output] '));
+    assert.equal(r.json.analysis.flagged_clauses.length, 2);
   });
 });

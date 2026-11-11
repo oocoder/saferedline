@@ -12,7 +12,8 @@
     "verify": "node scripts/verify_tee.mjs",
     "test": "node --test tests/*.test.mjs",
     "twin": "SAFEREDLINE_TWIN=1 node src/server.mjs",
-    "record": "node scripts/record_fixtures.mjs"
+    "record": "node scripts/record_fixtures.mjs",
+    "check:docs": "node scripts/check_docs.mjs"
   },
   "license": "MIT",
   "dependencies": {

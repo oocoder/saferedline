@@ -15,18 +15,61 @@ export const wallet = new Wallet('0x' + '11'.repeat(32));
 export const otherWallet = new Wallet('0x' + '22'.repeat(32));
 const sha256hex = (b) => crypto.createHash('sha256').update(b).digest('hex');
 
-const CLEAN = (quote) => ({
+const TAG = '[Simulated twin output] ';
+const clause = (clause_title, risk_level, original_text, why_its_risky, suggested_redline) => ({ clause_title, risk_level, original_text, why_its_risky, suggested_redline });
+
+// Sample-aware canned analyses (quotes are verbatim from samples/*.txt; tests assert quoteFound for each).
+const SAMPLES = {
+  'MUTUAL NON-DISCLOSURE AND EVALUATION AGREEMENT': {
+    overall_risk: 'High',
+    executive_summary: 'Despite its "mutual" title, this NDA protects only the Company: Recipient carries perpetual, uncapped obligations while Company owes nothing. Venue in the Cayman Islands makes any dispute costly to fight.',
+    flagged_clauses: [
+      clause('1. Confidential Information (one-sided definition)', 'High', 'Information disclosed by Recipient to Company shall NOT be deemed Confidential Information unless expressly agreed in an amendment signed by Company\'s CEO.', 'The agreement is titled mutual but only the Company\'s information is protected; anything Recipient shares can be used freely.', 'Confidential Information means any non-public information disclosed by either party to the other, whether orally or in writing, that is marked or reasonably understood to be confidential.'),
+      clause('2. Perpetual Term', 'High', 'Recipient\'s obligations of confidentiality under this Agreement shall survive in perpetuity, including with respect to information that becomes publicly known through no fault of Recipient.', 'Obligations never expire and even bind Recipient over public information, so ordinary public knowledge could become a breach.', 'Each party\'s confidentiality obligations shall continue for three (3) years from disclosure, and shall not apply to information that becomes publicly known through no fault of the receiving party.'),
+      clause('3. Feedback & IP Assignment', 'High', 'Any ideas, suggestions, feedback, or derivative concepts shared by Recipient during discussions shall automatically become the sole and exclusive property of Company', 'Everything Recipient says in discussions is assigned away for free, including its own ideas and derivative concepts.', 'Each party retains all rights in its own ideas and materials. Feedback may be used by the receiving party without obligation, but no ownership is transferred.'),
+      clause('4. Uncapped Indemnification', 'High', 'Recipient shall indemnify, defend, and hold harmless Company against any and all claims, damages, losses, and attorney fees arising out of or relating to this Agreement, with no cap on liability.', 'Unlimited, one-way liability for any claim relating to the agreement is a bet-the-company exposure.', 'Each party\'s aggregate liability under this Agreement shall not exceed fees paid or USD 50,000, whichever is greater, and indemnity applies only to the indemnitor\'s breach of confidentiality.'),
+      clause('5. Governing Law & Venue', 'Medium', 'any disputes shall be resolved exclusively in courts located in George Town, Cayman Islands.', 'An exclusive offshore forum makes enforcement and defense prohibitively expensive for Recipient.', 'This Agreement is governed by the laws of the State of Delaware, and disputes shall be heard in the state or federal courts located in Delaware.'),
+    ],
+    missing_protections: ['Mutual confidentiality obligations for both parties', 'Standard exclusions (public domain, independently developed, rightfully received from a third party, already known)', 'Return or destruction of confidential materials on request or termination'],
+  },
+  'STANDARD MUTUAL NON-DISCLOSURE AGREEMENT': {
+    overall_risk: 'Low',
+    executive_summary: 'A balanced, mutual NDA with reciprocal obligations and standard carve-outs. No clauses stand out as predatory.',
+    flagged_clauses: [],
+    missing_protections: ['Optional: an explicit timeline for deleting archival backup copies'],
+  },
+  'INDEPENDENT CONTRACTOR SERVICES AGREEMENT': {
+    overall_risk: 'High',
+    executive_summary: 'This contractor agreement shifts nearly all risk to the Contractor: open-ended scope, slow and discretionary payment, an IP grab and a worldwide non-compete, with asymmetric termination and liability. The auto-renewal notice window is also a trap.',
+    flagged_clauses: [
+      clause('1. Services (scope creep)', 'Medium', 'including any additional services Client deems reasonably related.', 'Scope is open-ended and decided unilaterally by the Client, with no change-order or extra pay.', 'Services are limited to those in a written statement of work; additional services require a signed change order and agreed fees.'),
+      clause('2. Payment (net-90, discretionary withholding)', 'High', 'Client may withhold payment for any deliverable it determines, in its sole discretion, to be unsatisfactory.', 'Combined with net-90 terms, the Client can delay or refuse payment on a subjective call.', 'Client shall pay undisputed invoices within thirty (30) days; any dispute must be raised in writing within ten (10) days with specific, reasonable grounds.'),
+      clause('3. Intellectual Property (beyond scope)', 'High', 'whether or not related to the Services and whether or not created using Client resources, shall be the exclusive property of Client.', 'Captures everything the Contractor creates during the term, including unrelated personal and other-client work.', 'Client owns only work product created specifically for the Services and paid for; Contractor retains pre-existing and unrelated IP.'),
+      clause('4. Non-Competition', 'High', 'Contractor shall not provide software development services to any business anywhere in the world.', 'A five-year, worldwide ban on the Contractor\'s whole trade is overbroad and likely to be unenforceable, but costly to contest.', 'Delete the non-compete, or limit it to direct competitors of the Client for six (6) months within the specific project domain.'),
+      clause('5. Termination (asymmetric)', 'High', 'Client may terminate this Agreement at any time without notice. Contractor may terminate this Agreement upon one hundred eighty (180) days\' written notice.', 'The Client can walk away instantly while the Contractor is locked in for six months.', 'Either party may terminate on thirty (30) days\' written notice; Client pays for work performed through the termination date.'),
+      clause('6. Liability (unlimited vs $100)', 'High', 'Contractor\'s liability under this Agreement shall be unlimited. Client\'s total liability shall not exceed one hundred dollars ($100).', 'Unlimited exposure for the Contractor against a $100 ceiling for the Client.', 'Each party\'s total liability is capped at the fees paid or payable under this Agreement in the preceding twelve (12) months.'),
+      clause('7. Automatic Renewal (notice trap)', 'Medium', 'unless Contractor provides notice of non-renewal no earlier than 190 days and no later than 180 days before the end of the then-current term.', 'The notice window is only ten days wide, so a missed date silently renews the one-sided terms.', 'Either party may give notice of non-renewal at any time at least thirty (30) days before the end of the term.'),
+    ],
+    missing_protections: ['Payment deadline and late-payment interest', 'Kill fee or payment for work done on termination', 'Mutual indemnity and an insurance requirement', 'Dispute-resolution and governing-law clause'],
+  },
+};
+
+const GENERIC = (quote) => ({
   overall_risk: 'High',
-  executive_summary: 'Twin summary: this simulated analysis shows the UI states. It is not real model output.',
-  flagged_clauses: [{
-    clause_title: 'Simulated clause', risk_level: 'High', original_text: quote,
-    why_its_risky: 'Simulated: one-sided obligation with no mutuality.', suggested_redline: 'Each party shall bear its obligations equally and for a reasonable, fixed term.',
-  }, {
-    clause_title: 'Hallucinated clause', risk_level: 'Medium', original_text: 'This sentence is not in the contract.',
-    why_its_risky: 'Simulated: exercises the "not found verbatim" tag.', suggested_redline: 'N/A',
-  }],
+  executive_summary: 'This simulated analysis shows the UI states for an unrecognized contract. It is not real model output.',
+  flagged_clauses: [
+    clause('Simulated clause', 'High', quote, 'Simulated: one-sided obligation with no mutuality.', 'Each party shall bear its obligations equally and for a reasonable, fixed term.'),
+    clause('Hallucinated clause', 'Medium', 'This sentence is not in the contract.', 'Simulated: exercises the "not found verbatim" tag.', 'N/A'),
+  ],
   missing_protections: ['Simulated: mutual termination right', 'Simulated: liability cap'],
 });
+
+export const twinAnalysis = (contract, quote) => {
+  const title = String(contract).trimStart().split('\n')[0].trim();
+  const doc = structuredClone(SAMPLES[title] || GENERIC(quote));
+  doc.executive_summary = TAG + doc.executive_summary;
+  return doc;
+};
 
 export function createTwin({ tls } = {}) {
   const twin = {
@@ -84,7 +127,7 @@ export function createTwin({ tls } = {}) {
           const contract = user.replace(/^CONTRACT TEXT:\n\n/, '');
           const quote = (contract.split('\n').find((l) => l.trim().length > 40) || contract).trim().slice(0, 140);
           let content;
-          const doc = CLEAN(quote);
+          const doc = twinAnalysis(contract, quote);
           if (m === 'fenced_json') content = '```json\n' + JSON.stringify(doc) + '\n```';
           else if (m === 'think_tags') content = '<think>secret reasoning</think>' + JSON.stringify(doc);
           else if (m === 'non_json') content = 'I am sorry, I cannot produce JSON today.';
