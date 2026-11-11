@@ -1,5 +1,15 @@
 # One-liner
 
+## Hackathon format (20 words or fewer)
+
+Template from the NEAR Private AI Hackathon NYC idea worksheet: **"For [who], [project name] [does what], and it needs private AI because [why]."**
+
+- **A (recommended, 19 words):** For founders, SafeRedline flags contract traps before you sign, and it needs private AI because unsigned deals can't leak.
+- **B (20 words):** For small legal teams, SafeRedline redlines NDAs in seconds, and it needs private AI because client secrets must stay sealed.
+- **C (19 words):** For deal-makers, SafeRedline reviews contracts in a locked room, and it needs private AI because privacy should be proven.
+
+## "We make" format
+
 Template: **We make ______ for ______ who need to ______ so they ______.**
 
 ## Recommended
