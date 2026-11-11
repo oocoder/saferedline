@@ -30,6 +30,8 @@ After the response: exact request and response bytes were signed (EIP-191) by a 
 - **(c) TCB policy matches NEAR's reference verifier** and accepts `OutOfDate`; the status is shown in the UI.
 - **(d) Responses carry no per-request nonce**, so replay only matters to a party already holding the plaintext.
 
+Live status (2026-11-11): the signature format (model-prefixed signed text), the reported `ecdsa` algorithm, pinned-TLS completion and signature calls, and signer = attested model key were confirmed against the real NEAR AI Cloud. Non-ASCII: the contractor sample's `sig_req` also passes live with `ASCII_SAFE_JSON` on and off.
+
 ## Security review
 
 Full write-up: [security-review.md](security-review.md). A separate-agent adversarial review (self-run, not a third-party audit) found no way to produce `verified: true` from attacker-supplied bytes alone; checks fail closed.

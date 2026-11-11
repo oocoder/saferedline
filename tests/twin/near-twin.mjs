@@ -129,10 +129,11 @@ export function createTwin({ tls } = {}) {
           let content;
           const doc = twinAnalysis(contract, quote);
           if (m === 'fenced_json') content = '```json\n' + JSON.stringify(doc) + '\n```';
+          else if (m === 'think_unclosed') content = (parsed.messages?.[0]?.content?.includes('Answer the user') ? 'Okay, {the user} asks about the term. Let me check {section 2}.\n</think>\n\n' + JSON.stringify({ answer: 'Twin answer: see the clause above. Simulated, not legal advice.' }) : 'Okay, the user wants JSON like {"overall_risk": ...}. Let me look at {clause 1} and {clause 2} carefully; maybe {"x": 1}.\n</think>\n\n' + JSON.stringify(doc));
           else if (m === 'think_tags') content = '<think>secret reasoning</think>' + JSON.stringify(doc);
           else if (m === 'non_json') content = 'I am sorry, I cannot produce JSON today.';
           else if (m === 'xss') { doc.flagged_clauses[0].why_its_risky = '<script>alert("xss")</script><img src=x onerror=alert(1)>'; content = JSON.stringify(doc); }
-          else if (parsed.messages?.[0]?.content?.includes('Answer the user')) content = 'Twin answer: see the clause above. Simulated, not legal advice.';
+          else if (parsed.messages?.[0]?.content?.includes('Answer the user')) { const a = 'Twin answer: see the clause above. Simulated, not legal advice.'; content = parsed.response_format ? JSON.stringify({ answer: a }) : a; }
           else content = JSON.stringify(doc);
           const id = `chatcmpl-twin-${++twin.counter}`;
           const inner = Buffer.from(m === 'non_json_body' ? '<html>not json</html>' : JSON.stringify({

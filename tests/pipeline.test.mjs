@@ -93,6 +93,22 @@ describe('POST /api/analyze happy paths', () => {
   });
 });
 
+describe('reasoning leakage (live: glm emits reasoning then a bare </think>)', () => {
+  test('unclosed </think> with braces in the reasoning: analysis still parsed', async () => {
+    env = await boot({ script: { chat: 'think_unclosed' } });
+    const r = await analyze();
+    assert.equal(r.status, 200);
+    assert.equal(r.json.analysisParseError, false);
+    assert.equal(r.json.analysis.overall_risk, 'High');
+    assert.equal(r.json.verified, true);
+  });
+  test('follow-up answer drops the reasoning', async () => {
+    env = await boot({ script: { chat: 'think_unclosed' } });
+    const r = await env.post('/api/ask', { text: CONTRACT, question: 'What is the term?' });
+    assert.equal(r.json.answer, 'Twin answer: see the clause above. Simulated, not legal advice.');
+  });
+});
+
 describe('failures', () => {
   test('signature tampering is NOT an error: 200 with verified:false (#15)', async () => {
     for (const signature of ['tampered_res', 'tampered_req', 'wrong_signer', 'model_mismatch']) {
