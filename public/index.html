@@ -36,6 +36,8 @@ header .tag{opacity:.8;font-size:1rem}
 header .spacer{flex:1}
 .pill{display:inline-block;border:1px solid currentColor;border-radius:999px;padding:2px 12px;font-size:.9rem}
 #twin{display:none;background:var(--amber-bg);color:var(--amber);border-bottom:2px solid var(--amber-line);padding:10px 24px;font-weight:700;text-align:center}
+#warn{display:none;background:var(--amber-bg);color:var(--amber);border-bottom:2px solid var(--amber-line);padding:10px 24px;font-weight:600}
+#warn.on{display:block}
 #twin.on{display:block}
 main{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:24px;padding:24px;max-width:1700px;margin:0 auto;align-items:start}
 @media (max-width:900px){main{grid-template-columns:1fr;padding:16px;gap:16px}header{padding:12px 16px}}
@@ -114,7 +116,8 @@ aside{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto}
 .chk.pass .ic{background:var(--green)}
 .chk.fail .ic{background:var(--red)}
 .chk.fail .lb{color:var(--red);font-weight:700}
-.chk.info .ic{background:var(--ink2)}
+.chk.info .ic{background:transparent;color:var(--ink2);font-size:1.3rem}
+.chk.info .lb{color:var(--ink2)}
 .chk .dt{display:block;font-size:.85rem;color:var(--ink2);overflow-wrap:anywhere}
 @keyframes in{from{opacity:0;transform:translateY(4px)}}
 @media (prefers-reduced-motion:reduce){.chk,.step.active .n{animation:none}}
@@ -131,6 +134,7 @@ input[type=text]{width:100%;background:var(--bg);color:var(--ink);border:1px sol
   <span class="spacer"></span>
   <span class="pill mono" id="hmode">connecting...</span>
 </header>
+<div id="warn" role="status"></div>
 <div id="twin" role="status">TWIN MODE: simulated enclave, not a real TEE</div>
 
 <main>
@@ -224,6 +228,7 @@ api('/api/health').then(function(h){
   health=h;
   var m=$('hmode');m.textContent=(h.mode==='twin'?'twin':'live')+' | '+h.model;
   if(h.mode==='twin')$('twin').classList.add('on');
+  if(h.warnings&&h.warnings.length){var wn=$('warn');h.warnings.forEach(function(w){wn.appendChild(el('div',null,'Warning: '+w))});wn.classList.add('on')}
   if(!h.apiKeyConfigured&&h.mode!=='twin'){$('inputmsg').textContent='No NEAR API key configured: analysis unavailable, but you can still verify the enclave.'}
 }).catch(function(){$('hmode').textContent='server unreachable'});
 api('/api/samples').then(function(list){
@@ -307,7 +312,7 @@ function renderTrust(att,sig,verified,opts){
   if(opts.notSent){var ns=el('div','vbadge bad',null);ns.style.marginTop='10px';ns.textContent='Contract NOT sent';ns.appendChild(el('span','sub','Verification failed before any contract text left this machine.'));body.appendChild(ns)}
   if(!att)return;
   var big=el('div','bignum');
-  var nChecks=att.checks.concat(sig?sig.checks:[]);
+  var nChecks=att.checks.concat(sig?sig.checks:[]).filter(function(c){return !c.informational});
   var passed=nChecks.filter(function(c){return c.pass}).length;
   var s1=el('div','stat',passed+'/'+nChecks.length);s1.appendChild(el('small',null,'checks passed'));big.appendChild(s1);
   if(att.gpuCount!=null){var s2=el('div','stat',att.gpuCount);s2.appendChild(el('small',null,'GPUs in CC mode'));big.appendChild(s2)}
@@ -336,9 +341,9 @@ function renderTrust(att,sig,verified,opts){
     if(!items.length)return;
     var grp=el('div','grp');grp.appendChild(el('h4',null,g[1]));list.appendChild(grp);
     items.forEach(function(c){
-      var row=el('div','chk '+(c.scope==='info'&&c.pass?'info':(c.pass?'pass':'fail')));
+      var row=el('div','chk '+(c.informational||c.scope==='info'&&c.pass?'info':(c.pass?'pass':'fail')));
       row.style.animationDelay=delay+'ms';row.style.opacity='0';row.style.animationFillMode='both';delay+=60;
-      row.appendChild(el('span','ic',c.pass?'✓':'✗'));
+      row.appendChild(el('span','ic',(c.informational||c.scope==='info'&&c.pass)?'ⓘ':(c.pass?'✓':'✗')));
       var t=el('div');t.appendChild(el('span','lb',c.label||c.id));if(c.detail)t.appendChild(el('span','dt',c.detail));row.appendChild(t);
       grp.appendChild(row);
     });
@@ -351,6 +356,8 @@ function renderTrust(att,sig,verified,opts){
 /* ---------- errors ---------- */
 function showError(box,e){
   clear(box);var i=e.info||{code:'INTERNAL',message:e.message,stage:'server',contractSent:false};
+  if(i.code==='BAD_ORIGIN')i=Object.assign({},i,{message:'Blocked: open SafeRedline via http://localhost or http://127.0.0.1 (same host as the server). '+(i.message||'')});
+  if(i.code==='UNSUPPORTED_MEDIA_TYPE')i=Object.assign({},i,{message:'Request rejected: unsupported content type. '+(i.message||'')});
   var a=el('div','alert '+(i.stage==='config'?'amber':'red'));a.setAttribute('role','alert');
   a.appendChild(document.createTextNode(i.message||'Something went wrong'));
   var sub=el('div','sub mono');sub.textContent=i.code+' | stage: '+i.stage;a.appendChild(sub);
@@ -379,6 +386,7 @@ $('analyze').addEventListener('click',function(){
     renderTrust(r.attestation,r.signature,r.verified);
     renderAnalysis(r);
     $('results').hidden=false;
+    var rs=$('analysis');setTimeout(function(){if(my===gen)rs.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})},450);
   }).catch(function(e){
     clearTimeout(t2);if(my!==gen)return;
     var i=showError($('errbox'),e);
