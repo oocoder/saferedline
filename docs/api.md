@@ -44,6 +44,8 @@ Channel = { tlsPinned: boolean, fingerprint: string | null, note: string }
 
 **Twin mode:** `npm run twin` replays recorded real attestation evidence (`attestation.evidence` is `"recorded"`) and simulates the model; twin analyze/ask responses also carry a `twinSignerNote` explaining that the response signer is a local test key. `TWIN_SCRIPT=<name>` selects a scripted behavior; the full list is `TWIN_SCRIPTS` in [`tests/twin/install.mjs`](../tests/twin/install.mjs) (for example `ok`, `tampered_res`, `wrong_signer`, `attestation_failed`, `attestation_unavailable`, `nras_down`, `xss`).
 
+**`X-Twin-Script` header (twin mode only):** selects a scenario per request. It is honoured only in twin mode (never live or hosted-demo) and only for an allowlist: `ok`, `tampered_res`, `attestation_failed`, `wrong_signer`. Any other value returns `400 BAD_INPUT`. This backs the UI's "Try an attack" buttons.
+
 **Error envelope (every non-2xx):**
 
 ```ts
@@ -60,7 +62,9 @@ Channel = { tlsPinned: boolean, fingerprint: string | null, note: string }
 | `NO_API_KEY` | 503 | false |
 | `ATTESTATION_FAILED` | 502 | false |
 | `ATTESTATION_UNAVAILABLE` (NEAR, PCCS or NRAS unreachable; message names which) | 503 | false |
-| `NEAR_AUTH` | 502 | true |
+| `NEAR_AUTH` (NEAR rejected the API key; at stage `attestation` `contractSent` is false, at stage `inference` it is true) | 502 | false at attestation, true at inference |
+| `SAMPLES_ONLY` (hosted demo accepts bundled samples only; stage `input`) | 403 | false |
+| `RATE_LIMITED` (hosted demo limits; stage `input`; `Retry-After` header) | 429 | false |
 | `INFERENCE_FAILED` | 502 | true |
 | `INFERENCE_TIMEOUT` | 504 | true |
 | `UNSUPPORTED_MEDIA_TYPE` (POST without `Content-Type: application/json`; stage `input`) | 415 | false |
@@ -72,8 +76,8 @@ A signature failure is **not** an error. It returns 200 with `verified: false`.
 
 **Endpoints:**
 
-- **`GET /api/health`** → `{ ok: true, model: string, apiKeyConfigured: boolean, mode: 'live' | 'twin', persistence: 'none', bind: string, version: string, warnings: string[], twinFakeKey?: boolean }`. `twinFakeKey` is set in twin mode, where the API key is a placeholder. `warnings` is non-empty when an endpoint override is active.
-- **`GET /api/models`** → `[{ id, name, context }]`: Confidential TEE models (`owned_by == "nearai"`) from NEAR's `/v1/models`.
+- **`GET /api/health`** → `{ ok: true, model: string, apiKeyConfigured: boolean, mode: 'live' | 'twin' | 'hosted-demo', persistence: 'none', bind: string, version: string, warnings: string[], twinFakeKey?: boolean }`. `twinFakeKey` is set in twin mode, where the API key is a placeholder. `warnings` is non-empty when an endpoint override is active.
+- **`GET /api/models`** → `[{ id, name, context }]` (in twin mode the entries carry `simulated: true`): Confidential TEE models (`owned_by == "nearai"`) from NEAR's `/v1/models`.
 - **`GET /api/samples`** → `[{ id: 'sample_predatory_nda', title: 'Predatory SaaS NDA', riskHint: 'High', text: string }, ...]`. Ordered predatory, balanced, contractor.
 - **`GET /api/attest`** → `200 Attestation`. Returned even when `verified` is false; the UI shows the red checks. Needs no key. `503 ATTESTATION_UNAVAILABLE` only when the report itself can't be fetched.
 - **`POST /api/analyze`**

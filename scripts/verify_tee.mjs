@@ -3,8 +3,11 @@
 // both sent over the SAME pinned TLS channel the app uses (certificate must match the attested gateway key).
 //   npm run verify                    # human-readable
 //   npm run verify -- --attest-only   # no API key needed
+//   node scripts/verify_tee.mjs --check receipt.json   # re-validate a saved receipt OFFLINE (internal consistency only)
 //   npm run prove                     # --json: machine-readable transcript on stdout (text goes to stderr)
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import { verifyMessage } from 'ethers';
 import { cfg, listTeeModels } from '../src/near.mjs';
 import { attestModel, verifyResponseSignature, deps, canPin } from '../src/attest.mjs';
 
@@ -16,6 +19,41 @@ const attestOnly = process.argv.includes('--attest-only') || noKey;
 const line = (c) => log(`  ${c.informational ? '\x1b[90mⓘ' : c.pass ? '\x1b[32m✔' : '\x1b[31m✘'}\x1b[0m ${c.label}  \x1b[2m${c.detail ?? ''}\x1b[0m`);
 const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
 const slim = (c) => ({ id: c.id, scope: c.scope, pass: c.pass, informational: !!c.informational });
+
+/** Offline receipt re-validation: internal consistency only. Prints what it can and cannot re-prove. */
+function checkReceipt(file) {
+  const out = [];
+  const ok = (name, pass, detail = '') => out.push({ name, pass, detail });
+  let r;
+  try { r = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { console.log(`FAILED READ: cannot read/parse ${file} (${String(e.message).split('\n')[0]})\nVerified: false`); process.exit(1); }
+  const hex = (v, n) => typeof v === 'string' && new RegExp(`^[0-9a-f]{${n}}$`, 'i').test(v);
+  ok('receipt is a successful run (ok:true)', r.ok === true);
+  ok('nonce is 64 hex chars', hex(r.nonce, 64), String(r.nonce).slice(0, 16) + '…');
+  const checks = Array.isArray(r.checks) ? r.checks : [];
+  const counted = checks.filter((c) => !c.informational);
+  ok('all counted checks passed', counted.length > 0 && counted.every((c) => c.pass === true), `${counted.filter((c) => c.pass).length}/${counted.length}`);
+  ok('verified flag agrees with the checks', r.verified === (r.attestationVerified && counted.every((c) => c.pass) && (!r.completionRun || !r.completionError)));
+  ok('measurements well-formed (mrtd/rtmr3 96 hex, composeHash/TLS fingerprint 64 hex)', hex(r.mrtd, 96) && hex(r.rtmr3, 96) && hex(r.composeHash, 64) && hex(r.gatewayTlsFingerprint, 64));
+  ok('enclave signer list present', Array.isArray(r.signingAddresses) && r.signingAddresses.length > 0 && r.signingAddresses.every((a) => /^0x[0-9a-f]{40}$/i.test(a)));
+  if (r.completionRun) {
+    ok('request/response hashes well-formed (sha256 hex)', hex(r.requestSha256, 64) && hex(r.responseSha256, 64));
+    const parts = String(r.signedText ?? '').split(':'); const resH = parts.pop(); const reqH = parts.pop(); const m = parts.join(':');
+    ok('signed text = <model>:<requestSha256>:<responseSha256> as listed', m === r.model && reqH === r.requestSha256 && resH === r.responseSha256);
+    let rec = '';
+    try { rec = verifyMessage(r.signedText, r.signature); } catch { /* invalid */ }
+    ok('signature recovers (EIP-191) to the listed signer', !!rec && rec.toLowerCase() === String(r.signingAddress).toLowerCase(), rec);
+    ok('that signer is one of the attested enclave signers', (r.signingAddresses || []).some((a) => a.toLowerCase() === String(r.signingAddress).toLowerCase()));
+  } else {
+    out.push({ name: 'completion + signature', pass: true, detail: 'not in this receipt (attestation-only run)' });
+  }
+  const good = out.every((o) => o.pass);
+  for (const o of out) console.log(`  ${o.pass ? '\x1b[32m✔' : '\x1b[31m✘'}\x1b[0m ${o.name}  \x1b[2m${o.detail}\x1b[0m`);
+  console.log('\nRe-proven OFFLINE: the receipt is internally consistent (field formats, counted checks, hashes and signature agree, signer is in the attested list).');
+  console.log('NOT re-provable offline: that the Intel TDX quote and collateral are genuine, that NVIDIA NRAS signed the GPU verdict, that the TLS certificate matched,');
+  console.log('that the nonce was fresh (only you know which nonce you chose), or that the request reached the enclave. Those need the live run (npm run verify).');
+  console.log(`\nVerified (receipt consistency only): ${good}`);
+  process.exit(good ? 0 : 1);
+}
 
 function fail(e) {
   const code = e?.code && typeof e.code === 'string' ? e.code : (e?.name === 'TypeError' ? 'NETWORK' : 'ERROR');
@@ -37,7 +75,7 @@ async function run() {
   att.checks.forEach(line);
   log(`  TCB status: ${att.tcbStatus}`);
 
-  let completionError = null, sigOk = true, ran = false, hashes = null, sigChecks = [];
+  let completionError = null, sigOk = true, ran = false, hashes = null, sigChecks = [], sigInfo = null;
   if (!attestOnly && att.verified) {
     ran = true;
     log('\n2) Private completion inside the TEE (pinned TLS)');
@@ -60,6 +98,7 @@ async function run() {
       const sig = await verifyResponseSignature({ chatId: body.id, model: MODEL, requestBody, responseBody, apiKey: API_KEY, attestedSigners: att.signingAddresses, pin });
       sig.checks.forEach(line);
       sigOk = sig.verified; sigChecks = sig.checks;
+      sigInfo = { model: MODEL, signedText: sig.text, signature: sig.signature, signingAddress: sig.signingAddress };
       hashes = { requestSha256: sha(Buffer.from(requestBody)), responseSha256: sha(responseBody) };
     }
   } else if (!attestOnly) {
@@ -93,10 +132,12 @@ async function run() {
       nonce: att.nonce, model: att.model, signingAddresses: att.signingAddresses, gatewaySigningAddress: att.gatewaySigningAddress,
       composeHash: att.composeHash, mrtd: att.measurement?.mrtd ?? null, rtmr3: att.measurement?.rtmr3 ?? null, mrConfigId: att.measurement?.mrConfigId ?? null,
       tcbStatus: att.tcbStatus, gpuCount: att.gpuCount, gatewayTlsFingerprint: att.gatewayTlsFingerprint, verifiedAt: att.verifiedAt,
-      checks: [...att.checks, ...sigChecks].map(slim), ...(hashes || {}),
+      checks: [...att.checks, ...sigChecks].map(slim), ...(hashes || {}), ...(sigInfo || {}),
     }, null, 2));
   }
   process.exit(verified ? 0 : 1);
 }
 
-run().catch(fail);
+const ci = process.argv.indexOf('--check');
+if (ci >= 0) checkReceipt(process.argv[ci + 1] || 'receipt.json');
+else run().catch(fail);

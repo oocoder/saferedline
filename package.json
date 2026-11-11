@@ -16,7 +16,8 @@
     "check:docs": "node scripts/check_docs.mjs",
     "prove": "node scripts/verify_tee.mjs --json",
     "e2e": "node tests/e2e/ui.e2e.mjs",
-    "demo:record": "node tests/e2e/record_demo.mjs"
+    "demo:record": "node tests/e2e/record_demo.mjs",
+    "check:receipt": "node scripts/verify_tee.mjs --check"
   },
   "license": "MIT",
   "dependencies": {
