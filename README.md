@@ -4,6 +4,8 @@ Review confidential contracts and NDAs with an LLM that runs inside a NEAR AI Cl
 
 Built by @AlexBuildsNY at the NEAR Private AI Hackathon NYC (Build City x NEAR Legion), Nov 11 2026. Track: Privacy & Private AI. License: MIT.
 
+> **Live demo (fictional samples only): https://saferedline.vercel.app** (URL to be confirmed after deploy). Honest scope: the hosted demo's own server runs on Vercel and is **not** a TEE, so Vercel can see the sample text; only the bundled fictional samples are accepted (enforced server-side, `403 SAMPLES_ONLY`). The AI call still runs in NEAR's attested enclave with all the verification checks. Review real contracts by running SafeRedline locally (Quickstart below).
+
 > **Live analysis needs your own NEAR AI Cloud key** (free to claim at https://nearbuilders.org/dashboard). Twin mode (`npm run twin`) needs no key: it replays recorded real attestation evidence and scripted model outputs to exercise the verification and failure states; the real model needs a key. A hosted demo mode is built (see [Hosted demo mode](#hosted-demo-mode)) but not deployed yet (link TBD).
 
 **No key? 3 commands, 60s:** `git clone https://github.com/oocoder/saferedline && cd saferedline && npm ci && npm run twin`
@@ -147,17 +149,17 @@ In `npm run twin`, responses are signed with a local test key. The response carr
 Contract text and model output live only in local variables for the duration of one HTTP request. Links are to the code that enforces or demonstrates it (line numbers synced to the final commit):
 
 - No database, no user-data cache, no session store, no write paths in the server. Evidence: the sentinel test [`tests/pipeline.test.mjs#L254`](tests/pipeline.test.mjs#L254) asserts no writes and no content in logs or errors.
-- Request body read into a variable, dropped after use: [`src/server.mjs#L144`](src/server.mjs#L144) and [`#L153`](src/server.mjs#L154)
-- Logs are metadata only (method, path, status, ms); never content: [`src/server.mjs#L186-L187`](src/server.mjs#L186-L187)
-- `Cache-Control: no-store` and CSP `connect-src 'self'` (the page cannot send the contract anywhere but your localhost server): [`src/server.mjs#L43-L47`](src/server.mjs#L43-L47)
-- Server binds `127.0.0.1` by default: default in [`createServer` L122](src/server.mjs#L122), [`HOST` L197](src/server.mjs#L197), [`listen` L208](src/server.mjs#L208)
+- Request body read into a variable, dropped after use: [`src/server.mjs#L216`](src/server.mjs#L216) and [`#L226`](src/server.mjs#L226)
+- Logs are metadata only (method, path, status, ms); never content: [`src/server.mjs#L285-L286`](src/server.mjs#L285-L286)
+- `Cache-Control: no-store` and CSP `connect-src 'self'` (the page cannot send the contract anywhere but your localhost server): [`src/server.mjs#L44-L48`](src/server.mjs#L44-L48)
+- Server binds `127.0.0.1` by default: default in [`createServer` L157](src/server.mjs#L157), [`HOST` L297](src/server.mjs#L297), [`listen` L309](src/server.mjs#L309)
 - Attestation gate: the contract is never sent unless attestation verified (`attestOrThrow`): [`src/near.mjs#L184`](src/near.mjs#L184), called at [`#L206`](src/near.mjs#L206) and [`#L233`](src/near.mjs#L233). Contract text is held only in call-local variables in `analyzeContract` ([`#L203`](src/near.mjs#L203)).
-- TLS pinning: [`makePinCheck` `src/attest.mjs#L97`](src/attest.mjs#L97), [`pinnedFetch` `#L111`](src/attest.mjs#L111), [`tls_bound` `#L392`](src/attest.mjs#L392); pin-mismatch handling in [`src/near.mjs#L121`](src/near.mjs#L121)
-- NVIDIA JWT verification: [`verifyJwt` `src/attest.mjs#L184`](src/attest.mjs#L184), [`gpuClaimProblems` `#L203`](src/attest.mjs#L203)
-- Response-signature verification (after inference): [`verifyResponseSignature` `src/attest.mjs#L435`](src/attest.mjs#L435); [`sig_req` L449](src/attest.mjs#L449), [`sig_model` L451](src/attest.mjs#L451), [`sig_attested` L466](src/attest.mjs#L466)
-- Attestation verifier entry points: [`verifyOne` `src/attest.mjs#L257`](src/attest.mjs#L257) (e.g. `rd_signer` [L294](src/attest.mjs#L294)), [`attestModel` `#L350`](src/attest.mjs#L350); the module performs no disk writes or content logging.
+- TLS pinning: [`makePinCheck` `src/attest.mjs#L99`](src/attest.mjs#L99), [`pinnedFetch` `#L113`](src/attest.mjs#L113), [`tls_bound` `#L473`](src/attest.mjs#L473); pin-mismatch handling in [`src/near.mjs#L121`](src/near.mjs#L121)
+- NVIDIA JWT verification: [`verifyJwt` `src/attest.mjs#L186`](src/attest.mjs#L186), [`gpuClaimProblems` `#L205`](src/attest.mjs#L205)
+- Response-signature verification (after inference): [`verifyResponseSignature` `src/attest.mjs#L516`](src/attest.mjs#L516); [`sig_req` L530](src/attest.mjs#L530), [`sig_model` L532](src/attest.mjs#L532), [`sig_attested` L547](src/attest.mjs#L547)
+- Attestation verifier entry points: [`verifyOne` `src/attest.mjs#L293`](src/attest.mjs#L293) (e.g. `rd_signer` [L330](src/attest.mjs#L330)), [`attestModel` `#L431`](src/attest.mjs#L431); the module performs no disk writes or content logging.
 - Test that proves it: a sentinel string `ZXQ-SECRET-7731` is analyzed and asserted absent from logs, error bodies and filesystem writes: [`tests/pipeline.test.mjs#L254`](tests/pipeline.test.mjs#L254)
-- Local CSRF protection: Host/Origin allowlist (`ALLOWED_HOSTS` adds extra hosts) and JSON-only POST, so another web page cannot make your browser post to your local server: [`src/server.mjs#L164`](src/server.mjs#L164).
+- Local CSRF protection: Host/Origin allowlist (`ALLOWED_HOSTS` adds extra hosts) and JSON-only POST, so another web page cannot make your browser post to your local server: [`src/server.mjs#L236`](src/server.mjs#L236).
 - Browser: no `localStorage` of contract text; PDFs are parsed in the browser and only extracted text is sent.
 
 ## Configuration
@@ -176,16 +178,16 @@ Set in `.env` or the environment (see `.env.example`). Only `NEAR_API_KEY` is re
 | `NEAR_TIMEOUT_MS` | `90000` | Timeout for the inference call; exceeding it returns `INFERENCE_TIMEOUT` |
 | `HOSTED_DEMO` | unset | `1` turns on hosted-demo mode (see below) |
 | `TRUST_PROXY` | `0` | `1` behind a reverse proxy: client IP = right-most `X-Forwarded-For`; otherwise the header is ignored |
-| `DEMO_ANALYZE_LIMIT` / `DEMO_ASK_LIMIT` | `5` / `20` | Analyses / follow-ups per IP per window (hosted demo) |
+| `DEMO_ANALYZE_LIMIT` / `DEMO_ASK_LIMIT` | `3` / `20` | Analyses / follow-ups per IP per window (hosted demo; per server instance on serverless) |
 | `DEMO_WINDOW_MS` | `600000` | Rate-limit window, 10 minutes (hosted demo) |
-| `DEMO_DAILY_CAP` | `200` | Global analyses plus follow-ups per UTC day (hosted demo) |
+| `DEMO_DAILY_CAP` | `60` | Analyses plus follow-ups per UTC day, per server instance (hosted demo) |
 | `ALLOW_ENDPOINT_OVERRIDE` | unset | Required (`1`) to redirect NEAR/Intel/NVIDIA endpoints via env; the server refuses otherwise, and `/api/health` shows a warning when active. Development only |
 
 A non-loopback `HOST` is refused unless `HOSTED_DEMO=1`, and a public bind with `HOSTED_DEMO=1` also requires `ALLOWED_HOSTS=<public hostname>`.
 
 ## Hosted demo mode
 
-Built, not deployed yet. `HOSTED_DEMO=1` makes the server a public showcase that only ever processes the bundled fictional samples (anything else returns `403 SAMPLES_ONLY`), with in-memory per-IP and daily rate limits (`429 RATE_LIMITED`) and `mode: 'hosted-demo'` in `/api/health`. Real contracts should still be reviewed locally. Variables: `ALLOWED_HOSTS` (required for a public bind), `TRUST_PROXY`, and the `DEMO_*` limits in the table above.
+Built; a Vercel deployment is planned (URL above is a placeholder until confirmed). `HOSTED_DEMO=1` makes the server a public showcase that only ever processes the bundled fictional samples (anything else returns `403 SAMPLES_ONLY`), with in-memory per-IP and daily rate limits (`429 RATE_LIMITED`) and `mode: 'hosted-demo'` in `/api/health`. Real contracts should still be reviewed locally. Variables: `ALLOWED_HOSTS` (required for a public bind), `TRUST_PROXY`, and the `DEMO_*` limits in the table above.
 
 ```
 docker build -t saferedline:demo .
@@ -193,7 +195,21 @@ docker run --rm -p 3000:3000 -e NEAR_API_KEY=sk-... -e HOSTED_DEMO=1 -e HOST=0.0
 # or: NEAR_API_KEY=sk-... ALLOWED_HOSTS=demo.example.org docker compose up -d --build
 ```
 
-`Dockerfile` and `docker-compose.yml` are in the repo root (pinned base image, read-only filesystem, no secrets baked in). Running the demo itself inside a TEE is on the roadmap.
+`Dockerfile` and `docker-compose.yml` are in the repo root (pinned base image, read-only filesystem, no secrets baked in).
+
+### Deploying to Vercel
+
+1. `vercel link` (once, in the repo root).
+2. Set environment variables for Production: `NEAR_API_KEY` (mark it sensitive), `HOSTED_DEMO=1`, `TRUST_PROXY=1`, `NODEJS_HELPERS=0`, and `ALLOWED_HOSTS=<prod alias>` (your production Vercel hostname).
+3. `vercel deploy --prod`, then open the URL, load a sample and check that the Verified TEE panel passes. `GET /api/health` should report `mode: "hosted-demo"`.
+
+Hosted behavior on Vercel: 3 analyses per IP per 10 minutes and a daily cap of 60 per server instance; `GET /api/attest` is cached for 45 seconds in hosted mode; the handler answers with its own JSON error envelope at a 100 second deadline, before the 120 second function limit (`vercel.json`); `/api/health` reports `platform: "vercel"` and `bind: "vercel"`.
+
+Cost protections: the NEAR AI Cloud key's spend cap is the hard backstop. The in-app rate limits (per IP and a daily cap) live in memory, so on serverless they apply per instance and are a best-effort layer, not a global guarantee.
+
+### Planned upgrade: attested hosting
+
+The hosted server is the one party in this setup that is not attested. The planned upgrade is to run the same container in a TEE (Phala dstack CVM) so the server is attested too, and to publish its compose hash for pinning.
 
 ## Architecture
 

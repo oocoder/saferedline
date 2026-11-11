@@ -16,6 +16,10 @@
 Before the contract leaves the machine: gateway and every model instance are genuine Intel TDX with accepted TCB and debug off; the quote binds a fresh nonce (live, not replayed) and the enclave signing key; the compose hash is in MRCONFIGID and RTMR3 replays; NVIDIA NRAS says the GPUs are in CC mode against the same nonce (ES384 JWT signature verified against NVIDIA's JWKS; `eat_nonce` and `exp` checked on overall and per-GPU tokens; at least one GPU).
 After the response: exact request and response bytes were signed (EIP-191) by a key attested above, so the output came from that enclave and was not modified in transit.
 
+## Hosted demo (optional deployment)
+
+The Vercel-hosted demo adds Vercel as a party that sees the request text. It only ever processes the bundled fictional samples: this is enforced server-side (`403 SAMPLES_ONLY` for anything else), not just in the UI. The hosted server is not a TEE. The attested NEAR gateway and model, and every verification check, behave exactly as in local mode. Real contracts should be reviewed locally. Rate limits are in memory (per instance on serverless); the NEAR key's spend cap is the hard cost backstop. Planned upgrade: run the same container in a TEE (Phala dstack) so the hosted server is attested too.
+
 ## Not proven
 
 1. **Gateway and model still see plaintext.** TLS pinning (see (a) below) shows the endpoint is the attested gateway, not that its code is benign; the gateway forwards plaintext to the attested model.

@@ -41,7 +41,7 @@ flowchart LR
 ## Open items (from next.md "After demo", by Nov 14)
 
 - [ ] User: public GitHub repo, X post (draft in [docs/submission-kit.md](docs/submission-kit.md)), form at nearhackathon.com/#apply.
-- [ ] Hosted demo required for judges (Q-012), up until at least Nov 18; hosted-demo mode (`HOSTED_DEMO=1`, Dockerfile, docker-compose.yml) is built but NOT deployed yet; stretch: run SafeRedline itself in a TEE (dstack CVM) to close the "server sees plaintext" gap.
+- [ ] Hosted demo required for judges (Q-012), up until at least Nov 18; hosted-demo mode (`HOSTED_DEMO=1`, Dockerfile, docker-compose.yml) is built; Vercel adapter built (`api/index.mjs`, `vercel.json`), deploy pending (placeholder https://saferedline.vercel.app, confirm after deploy); stretch: run SafeRedline itself in a TEE (dstack CVM) to close the "server sees plaintext" gap.
 - [ ] Stretch: ICM `workspace/` for batch contract review.
 
 ## Pointers
