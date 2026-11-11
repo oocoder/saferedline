@@ -22,7 +22,7 @@ SafeRedline: local contract/NDA reviewer that sends text only to a NEAR AI Cloud
 | HTTP API reference | `docs/api.md` |
 | Demo flow + judge Q&A | `docs/demo-script.md` |
 | Hackathon submission fields | `docs/submission-kit.md`, `docs/submission-research.md` |
-| Active task list | `next.md` |
+| Open items and status | `OUTLINE.md` |
 
 ## Run / test / verify
 - `npm ci` install
