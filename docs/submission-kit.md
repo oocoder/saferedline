@@ -45,7 +45,7 @@ SafeRedline is a contract and NDA reviewer you run on your own machine. You load
 
 What makes it verifiable: before any contract is sent, the app fetches the gateway and model enclave attestations bound to a fresh nonce and verifies the Intel TDX quote, debug-off, the signing key and nonce in the quote, the compose hash, the RTMR3 event log, and NVIDIA's GPU verdict. If any check fails, the contract is not sent. After the response, it checks the enclave's signature over the exact request and response bytes against the attested key. A panel shows every check.
 
-We are explicit about limits: the TLS connection is not yet pinned to the enclave, enclave software is identified by hash rather than audited, and our local server is not attested (it is open code with no persistence and a test asserting nothing is logged or written).
+We are explicit about limits: enclave software is identified by hash rather than audited or pinned to a release, and the attested gateway and model still see plaintext, and our local server is not attested (it is open code with no persistence and a test asserting nothing is logged or written).
 
 NEAR is load-bearing: NEAR AI Cloud runs the open-weight model in the TEE and exposes the attestation and signature endpoints we verify against. Without it this is a chatbot with a privacy policy.
 ```

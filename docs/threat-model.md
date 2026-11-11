@@ -6,7 +6,7 @@
 |---|---|---|
 | You / your browser | yes | you |
 | SafeRedline server (your machine) | yes | you run it; code is readable; not attested |
-| TLS path to cloud-api.near.ai (front proxy / LB) | possibly | WebPKI only, not bound to enclave |
+| TLS path to cloud-api.near.ai | no | leaf SPKI sha256 pinned to the fingerprint bound in the attested gateway quote |
 | NEAR gateway enclave | yes | Intel TDX attestation |
 | Model enclave | yes | Intel TDX + NVIDIA CC attestation |
 | Intel / Phala PCCS, NVIDIA NRAS | no (receive quotes/GPU evidence only) | public infrastructure |
@@ -18,14 +18,14 @@ After the response: exact request and response bytes were signed (EIP-191) by a 
 
 ## Not proven
 
-1. **Transport binding.** `include_tls_fingerprint=false`. Plaintext goes over ordinary TLS; nothing proves the endpoint is the attested gateway. Signature check gives integrity after the fact, not confidentiality. Planned: SPKI fingerprint comparison as an informational check.
-2. **Enclave code behavior.** Compose hash is displayed, not pinned to a known-good release; image digests vs claimed weights not checked.
+1. **Gateway and model still see plaintext.** TLS pinning (see (a) below) shows the endpoint is the attested gateway, not that its code is benign; the gateway forwards plaintext to the attested model.
+2. **Enclave code behavior.** Compose hash is displayed (pin optional via `EXPECTED_COMPOSE_HASH`), not pinned to a known-good release; image digests vs claimed weights not checked.
 3. **Our server.** Not in a TEE. Zero retention is a code-level claim (no fs writes, DB, content logs). Swap and core dumps are out of scope.
 4. **Model correctness.** Output may be wrong; `quoteFound` is only a verbatim-quote guard.
 
 ## Deferred limits (from independent review)
 
-- **(a) No TLS channel binding.** A relay in front of NEAR could see plaintext while attestation and signature still verify, because nothing ties the TLS endpoint to the attested enclave. Fix: `include_tls_fingerprint` compared to the live certificate, or end-to-end encryption to the attested key.
+- **(a) TLS channel binding: RESOLVED.** The contract and signature calls go only over TLS whose leaf SPKI sha256 equals the fingerprint bound inside the attested gateway quote, checked in the handshake before any bytes are written. A mismatch fails with `ATTESTATION_FAILED` and the contract is not sent. `TLS_BOUND_STRICT=0` downgrades the check to informational (development only).
 - **(b) Measurement pinning is optional** (`EXPECTED_COMPOSE_HASH`). We verify the enclave is genuine and which code hash it runs, not that the hash is a NEAR-published release. Fix: pin to known-good published releases.
 - **(c) TCB policy matches NEAR's reference verifier** and accepts `OutOfDate`; the status is shown in the UI.
 - **(d) Responses carry no per-request nonce**, so replay only matters to a party already holding the plaintext.
@@ -36,7 +36,7 @@ An independent adversarial review found no way to produce `verified: true` from 
 
 Tested: fail-open paths (missing quote body, compose, gateway, signer, malformed NRAS); that test seams (`deps`, twin) are unreachable from HTTP requests; the sentinel test showing contract text never reaches logs, error bodies or fs writes.
 
-Hardening done: strict signature model and algorithm checks, exact signer-address length, NVIDIA JWT verification with GPU count, nonce and expiry checks, a lock on endpoint overrides (`ALLOW_ENDPOINT_OVERRIDE`), and local CSRF protection (Host/Origin allowlist, JSON-only POST). In progress: TLS binding (currently an informational `tls_bound` check).
+Hardening done: strict signature model and algorithm checks, exact signer-address length, NVIDIA JWT verification with GPU count, nonce and expiry checks, a lock on endpoint overrides (`ALLOW_ENDPOINT_OVERRIDE`), and local CSRF protection (Host/Origin allowlist, JSON-only POST). TLS binding is done (`tls_bound`).
 
 ## Fail-closed design
 

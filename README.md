@@ -84,6 +84,7 @@ Run per request, in this order, before and after the contract is sent. Any faile
 |---|---|
 | `sig_req`: signed request hash equals sha256 of the exact bytes we sent | The enclave saw our request, unmodified. |
 | `sig_res`: signed response hash equals sha256 of the exact bytes received | The answer was not altered in transit. |
+| `tls_bound`: SPKI sha256 of the TLS leaf certificate equals the fingerprint bound in the attested gateway quote; enforced in the handshake before any contract byte is written | The endpoint that receives your plaintext is the attested gateway, not a relay in front of it. Mismatch gives `ATTESTATION_FAILED` and the contract is not sent. |
 | `measurement_pinning` (informational, not counted in `verified`) | Shows whether a known-good compose hash is pinned via `EXPECTED_COMPOSE_HASH`; off by default. |
 | `sig_algo`: signature algorithm is ECDSA | No algorithm downgrade. |
 | `sig_ecdsa`: EIP-191 signature recovers to the signing address | The signature is valid. |
@@ -95,16 +96,15 @@ The authoritative check list is whatever `GET /api/attest` returns (22 checks li
 
 ## The honest claim
 
-> SafeRedline runs on your machine and sends your contract only to a NEAR AI Cloud model after cryptographically verifying, with a fresh nonce, that the model and gateway run in genuine Intel TDX + NVIDIA confidential-computing enclaves. Every answer is checked against an enclave-held key bound to that attestation. SafeRedline itself stores nothing. Limits: the TLS connection is not pinned to the enclave, and the enclave's software is identified by hash, not audited.
+> SafeRedline runs on your machine and sends your contract only to a NEAR AI Cloud model after cryptographically verifying, with a fresh nonce, that the model and gateway run in genuine Intel TDX + NVIDIA confidential-computing enclaves. The contract and signature requests go only over a TLS connection whose certificate key matches the fingerprint bound inside the attested gateway quote, and every answer is checked against an enclave-held key bound to that attestation. SafeRedline itself stores nothing. Limits: the enclave's software is identified by hash, not audited or pinned to a published release, and the attested gateway and model still see your plaintext.
 
 ### What is NOT proven
 
-- **TLS is not bound to the enclave.** The attestation report is requested with `include_tls_fingerprint=false`. We do not prove the TLS endpoint we sent plaintext to is the attested gateway; a front proxy or load balancer before the TEE is trusted only via ordinary WebPKI. The response signature gives integrity after the fact, not confidentiality.
+- **The attested gateway still sees plaintext.** TLS pinning proves the endpoint is the attested gateway, not that the gateway or model code is benign; the gateway forwards plaintext to the attested model.
 - **Enclave software is identified by hash, not audited.** We show the compose hash but do not pin it to a known-good NEAR release or verify that image digests serve the claimed weights. "No retention inside NEAR" rests on the attested compose being what NEAR publishes.
 - **SafeRedline's own server is not attested.** It is not in a TEE and sees plaintext. "Zero retention" on our side is a code-level claim you can verify by reading the code, not a hardware-attested one. OS swap and core dumps are out of scope.
 - **Intel TCB status may be `OutOfDate`/`SWHardeningNeeded`.** Our TCB policy matches NEAR's reference verifier, which accepts these, and the status is shown in the UI; they mean a genuine quote on a platform behind Intel's latest advisories.
-- **A relay in front of NEAR could see plaintext while verification still passes.** There is no TLS channel binding (see the first item). Planned fix: request `include_tls_fingerprint` and compare it to the live certificate, or end-to-end encrypt to the attested key.
-- **Measurement pinning is optional.** Setting `EXPECTED_COMPOSE_HASH` pins the code hash; otherwise we verify the enclave is genuine and which code hash it runs, not that the hash is a NEAR-published release. Planned fix: ship a pinned list of known-good releases.
+- **Pinning needs the gateway's TLS key.** If you must run behind a CDN or proxy, `TLS_BOUND_STRICT=0` makes `tls_bound` informational; do not do that for real contracts.- **Measurement pinning is optional.** Setting `EXPECTED_COMPOSE_HASH` pins the code hash; otherwise we verify the enclave is genuine and which code hash it runs, not that the hash is a NEAR-published release. Planned fix: ship a pinned list of known-good releases.
 - **Responses carry no per-request nonce.** Replay of a response only matters to a party that already holds the plaintext, so we treat it as out of scope; the attestation itself is nonce-bound.
 - Model output is untrusted text and can be wrong or hallucinated; `quoteFound` flags clauses whose quote is not verbatim in your contract. This is informational analysis, not legal advice.
 
@@ -112,18 +112,20 @@ Details: [docs/threat-model.md](docs/threat-model.md).
 
 ## Zero data retention
 
-Contract text and model output live only in local variables for the duration of one HTTP request. Links are to the code that enforces or demonstrates it (line numbers synced at final commit):
+Contract text and model output live only in local variables for the duration of one HTTP request. Links are to the code that enforces or demonstrates it (line numbers synced to the final commit):
 
 - No database, file writes, cache or session store in the server (only read-only loads of the UI and samples): [`src/server.mjs#L1-L16`](src/server.mjs#L1-L16)
 - Request body read into a variable, dropped after use: [`src/server.mjs#L105`](src/server.mjs#L105) and [`#L114`](src/server.mjs#L114)
-- Logs are metadata only (method, path, status, ms); never content: [`src/server.mjs#L130-L131`](src/server.mjs#L130-L131)
+- Logs are metadata only (method, path, status, ms); never content: [`src/server.mjs#L142-L143`](src/server.mjs#L142-L143)
 - `Cache-Control: no-store` and CSP `connect-src 'self'` (the page cannot send the contract anywhere but your localhost server): [`src/server.mjs#L42-L46`](src/server.mjs#L42-L46)
-- Server binds `127.0.0.1` by default: [`src/server.mjs#L138`](src/server.mjs#L138) and [`#L146`](src/server.mjs#L146)
-- Attestation gate: the contract is never sent unless attestation verified (`attestOrThrow`): [`src/near.mjs#L181-L195`](src/near.mjs#L181-L195), called at [`#L202`](src/near.mjs#L202) and [`#L228`](src/near.mjs#L228). Contract text is held only in call-local variables in `analyzeContract` ([`#L199`](src/near.mjs#L199)).
-- Response-signature verification (after inference): [`src/attest.mjs#L297`](src/attest.mjs#L297)
-- Attestation verifier entry points: [`verifyOne` `src/attest.mjs#L155`](src/attest.mjs#L155), [`attestModel` `#L241`](src/attest.mjs#L241); the module performs no disk writes or content logging.
+- Server binds `127.0.0.1` by default: default in [`createServer` L93](src/server.mjs#L93), [`HOST` L150](src/server.mjs#L150), [`listen` L158](src/server.mjs#L158)
+- Attestation gate: the contract is never sent unless attestation verified (`attestOrThrow`): [`src/near.mjs#L172`](src/near.mjs#L172), called at [`#L194`](src/near.mjs#L194) and [`#L220`](src/near.mjs#L220). Contract text is held only in call-local variables in `analyzeContract` ([`#L191`](src/near.mjs#L191)).
+- TLS pinning: [`makePinCheck` `src/attest.mjs#L93`](src/attest.mjs#L93), [`pinnedFetch` `#L107`](src/attest.mjs#L107), [`tls_bound` `#L384`](src/attest.mjs#L384); pin-mismatch handling in [`src/near.mjs#L109`](src/near.mjs#L109)
+- NVIDIA JWT verification: [`verifyJwt` `src/attest.mjs#L180`](src/attest.mjs#L180), [`gpuClaimProblems` `#L199`](src/attest.mjs#L199)
+- Response-signature verification (after inference): [`verifyResponseSignature` `src/attest.mjs#L422`](src/attest.mjs#L422); [`sig_req` L436](src/attest.mjs#L436), [`sig_model` L438](src/attest.mjs#L438), [`sig_attested` L444](src/attest.mjs#L444)
+- Attestation verifier entry points: [`verifyOne` `src/attest.mjs#L253`](src/attest.mjs#L253) (e.g. `rd_signer` [L290](src/attest.mjs#L290)), [`attestModel` `#L346`](src/attest.mjs#L346); the module performs no disk writes or content logging.
 - Test that proves it: a sentinel string `ZXQ-SECRET-7731` is analyzed and asserted absent from logs, error bodies and filesystem writes: [`tests/pipeline.test.mjs#L193`](tests/pipeline.test.mjs#L193)
-- Local CSRF protection: Host/Origin allowlist (`ALLOWED_HOSTS` adds extra hosts) and JSON-only POST, so another web page cannot make your browser post to your local server: see [`src/server.mjs`](src/server.mjs) (line link added at final sync).
+- Local CSRF protection: Host/Origin allowlist (`ALLOWED_HOSTS` adds extra hosts) and JSON-only POST, so another web page cannot make your browser post to your local server: [`src/server.mjs#L124`](src/server.mjs#L124).
 - Browser: no `localStorage` of contract text; PDFs are parsed in the browser and only extracted text is sent.
 
 ## Configuration
@@ -138,6 +140,7 @@ Set in `.env` or the environment (see `.env.example`). Only `NEAR_API_KEY` is re
 | `PORT` | `3000` | Listen port |
 | `ALLOWED_HOSTS` | none | Extra Host header values accepted by the local server (CSRF/DNS-rebinding guard) |
 | `EXPECTED_COMPOSE_HASH` | unset | If set, the attested compose hash must equal it (`compose_pinned` check) |
+| `TLS_BOUND_STRICT` | on | Set `0` to make `tls_bound` informational (CDN/proxy in front of the TEE). Development only |
 | `ALLOW_ENDPOINT_OVERRIDE` | unset | Required (`1`) to redirect NEAR/Intel/NVIDIA endpoints via env; the server refuses otherwise, and `/api/health` shows a warning when active. Development only |
 
 ## Architecture
@@ -148,7 +151,7 @@ flowchart LR
     B["Browser UI<br/>public/index.html"] -->|"localhost JSON<br/>CSP connect-src self"| S["SafeRedline server<br/>src/server.mjs, 127.0.0.1<br/>sees plaintext, stores nothing"]
     S --> V["Verifier<br/>src/attest.mjs"]
   end
-  S -->|"TLS (WebPKI, not pinned)"| GW
+  S -->|"TLS pinned to attested gateway key"| GW
   subgraph NEAR["NEAR AI Cloud (attested)"]
     GW["Gateway TEE<br/>Intel TDX, sees plaintext"] --> M["Model TEE<br/>Intel TDX + NVIDIA GPU CC<br/>z-ai/glm-5.3-flash"]
   end
@@ -183,7 +186,7 @@ How we frame the product, not a measured comparison. Sources and caveats: [docs/
 
 ## Roadmap (not built)
 
-Hosted demo; running SafeRedline itself in a TEE (dstack CVM) to close the "our server sees plaintext" gap; TLS fingerprint binding (recommended by NEAR's near-ai-cloud skill; in progress, informational only for now); pinning the compose hash to a known NEAR release; batch review.
+Hosted demo; running SafeRedline itself in a TEE (dstack CVM) to close the "our server sees plaintext" gap; Sigstore provenance check of the attested image digests; pinning the compose hash to a known NEAR release; batch review.
 
 ## Project layout
 
