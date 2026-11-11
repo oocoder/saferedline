@@ -46,8 +46,9 @@ const ctx = await browser.newContext({
   viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2,
   recordVideo: { dir: RAW, size: { width: 1440, height: 900 } },
 });
-const page = await ctx.newPage();
 const t0 = Date.now();
+const page = await ctx.newPage();
+const vt = () => (Date.now() - t0) / 1000; // seconds since the video started
 
 async function installOverlay() {
   await page.evaluate(() => {
@@ -94,68 +95,72 @@ await page.click('#analyze');
 await sleep(4500);
 await caption('\u2461 Contract sent only over TLS bound inside the enclave');
 const ready = page.waitForSelector('#results:not([hidden]) .risk', { timeout: 120000 }).then(() => true);
-if (!(await Promise.race([ready, sleep(5000).then(() => false)]))) {
-  // live inference takes ~25s: keep the stepper on screen with an honest caption
+let waitA = 0, waitB = 0;
+if (!(await Promise.race([ready, sleep(4500).then(() => false)]))) {
+  // live inference takes ~25s: keep the stepper on screen, and be honest that this stretch is sped up in the edit
   await caption('Running inside the TEE\u2026 (real model, real hardware attestation)');
+  await page.evaluate(() => { const d = document.createElement('div'); d.id = '__sp'; d.textContent = '\u23E9 sped up 3x'; d.style.cssText = 'position:fixed;right:24px;bottom:120px;z-index:2147483647;padding:8px 16px;border-radius:999px;background:#f5c04d;color:#1a1200;font:700 24px system-ui,sans-serif;pointer-events:none'; document.documentElement.appendChild(d); });
+  waitA = vt() + 0.8;
   await ready;
+  waitB = vt() - 0.3;
   await caption('Enclave verified. Report ready.');
+  await sleep(500);
+  await page.evaluate(() => document.getElementById('__sp')?.remove());
 }
 await sleep(2500);
 
 // Redline report
-await caption('Five traps, each with the verbatim quote and a ready-to-paste redline');
-await scrollToEl('#analysis', 40); await sleep(3500);
-const clauseIdx = await page.locator('.clause h3').evaluateAll((hs) => { const i = hs.findIndex((h) => /IP|assign|feedback/i.test(h.textContent)); return i < 0 ? 0 : i; });
-const card = page.locator('.clause').nth(clauseIdx);
-await caption('Anything you say in meetings becomes theirs, for free. It drafts balanced wording.');
-await card.scrollIntoViewIfNeeded();
-const cardTop = await card.evaluate((e) => e.getBoundingClientRect().top + scrollY - 110); await smoothScroll(cardTop); await sleep(3500);
-await glide(`.clause:nth-of-type(${clauseIdx + 1}) .btn.sm`).catch(() => {});
-const copyBtn = card.locator('.btn.sm').first();
-await copyBtn.hover(); await sleep(800); await copyBtn.click(); await sleep(2200);
-
-// Trust panel
-await caption('③ Every answer signed by the enclave key');
-await smoothScroll(0);
-await glide('#vbadge'); await sleep(2800);
-{ // still 1: the green "Hardware TEE verified" panel, overlay hidden for the shot
-  await page.evaluate(() => { for (const id of ['__cap', '__cur']) document.getElementById(id).style.visibility = 'hidden'; });
-  const b = await page.locator('aside').boundingBox();
-  await page.screenshot({ path: path.join(OUT, 'still-1-verified-panel.png'), clip: { x: b.x, y: Math.max(0, b.y - 8), width: b.width, height: Math.min(900 - Math.max(0, b.y - 8), b.height + 16) } });
-  await page.evaluate(() => { for (const id of ['__cap', '__cur']) document.getElementById(id).style.visibility = 'visible'; });
-}
-await asideScroll(150); await sleep(2200);
-await asideScroll(520); await sleep(2200);
-await asideScroll(900); await sleep(2200);
-await asideScroll(1400); await sleep(2200);
-await asideScroll(99999); await sleep(2200);
-await asideScroll(0); await sleep(500);
-
-// Verify only
-await caption('Anyone can re-run this check. No contract needed.');
-await glide('#verifyonly'); await sleep(500);
-await page.click('#verifyonly');
-await page.waitForFunction(() => /Enclave verified|UNVERIFIED/.test(document.getElementById('vbadge').textContent), null, { timeout: 60000 });
-await sleep(3500);
-await caption('Other tools promise zero retention. SafeRedline proves where it ran.');
-await sleep(5500);
-await caption('');
-await sleep(800);
-
-// Stills from the recording page (verified panel while green)
+const hideOv = (h) => page.evaluate((v) => { for (const id of ['__cap', '__cur', '__sp']) { const e = document.getElementById(id); if (e) e.style.visibility = v; } }, h ? 'hidden' : 'visible');
 const stills = {
   verified: path.join(OUT, 'still-1-verified-panel.png'),
   report: path.join(OUT, 'still-2-high-risk-report.png'),
   redline: path.join(OUT, 'still-3-redline-card.png'),
   fail: path.join(OUT, 'still-4-contract-not-sent.png'),
 };
-await page.evaluate(() => document.getElementById('__cap').remove());
-await page.evaluate(() => document.getElementById('__cur').remove());
-await page.evaluate(() => { document.querySelector('aside').scrollTo(0, 0); window.scrollTo(0, 0); });
-await sleep(300);
-await card.screenshot({ path: stills.redline });
-await scrollToEl('#analysis', 20); await sleep(500);
-await page.screenshot({ path: stills.report });
+await caption('Five traps, each with the verbatim quote and a ready-to-paste redline');
+await scrollToEl('#analysis', 40); await sleep(1200);
+await hideOv(true); await page.screenshot({ path: stills.report }); await hideOv(false);
+await sleep(2300);
+const clauseIdx = await page.locator('.clause h3').evaluateAll((hs) => { const i = hs.findIndex((h) => /IP|assign|feedback/i.test(h.textContent)); return i < 0 ? 0 : i; });
+const card = page.locator('.clause').nth(clauseIdx);
+await caption('Anything you say in meetings becomes theirs, for free. It drafts balanced wording.');
+const cardTop = await card.evaluate((e) => e.getBoundingClientRect().top + scrollY - 110); await smoothScroll(cardTop); await sleep(1500);
+await hideOv(true); await card.screenshot({ path: stills.redline }); await hideOv(false);
+await sleep(2000);
+const copyBtn = card.locator('.btn.sm').first();
+await copyBtn.hover(); await sleep(800); await copyBtn.click(); await sleep(1800);
+
+// Trust panel: scroll only the panel (it is sticky), never the page
+await caption('\u2462 Every answer signed by the enclave key');
+await glide('#vbadge'); await sleep(1500);
+{ await hideOv(true);
+  const b = await page.locator('aside').boundingBox();
+  await page.screenshot({ path: stills.verified, clip: { x: b.x, y: Math.max(0, b.y - 8), width: b.width, height: Math.min(900 - Math.max(0, b.y - 8), b.height + 16) } });
+  await hideOv(false); }
+await caption('Every check, listed: TDX quote \u00B7 GPU attestation \u00B7 TLS binding \u00B7 signature');
+await asideScroll(300); await sleep(900);
+await asideScroll(700); await sleep(900);
+await asideScroll(1100); await sleep(900);
+await asideScroll(99999); await sleep(1000);
+await asideScroll(0); await sleep(400);
+
+// Verify only, then the closing hold on the green badge
+await caption('Anyone can re-run this check. No contract needed.');
+await glide('#verifyonly'); await sleep(500);
+await page.click('#verifyonly');
+await page.waitForFunction(() => /Enclave verified|UNVERIFIED/.test(document.getElementById('vbadge').textContent), null, { timeout: 60000 });
+await sleep(2500);
+await caption('Other tools promise zero retention. SafeRedline proves where it ran.');
+await sleep(5000);
+
+// End card (recording only)
+await page.evaluate(() => {
+  const c = document.createElement('div');
+  c.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#050b15;color:#fff;display:flex;align-items:center;justify-content:center;font:600 44px/1.4 system-ui,sans-serif;text-align:center;opacity:0;transition:opacity .5s';
+  c.textContent = 'SafeRedline \u00B7 github.com/oocoder/saferedline \u00B7 Built at NEAR HACKATHON';
+  document.documentElement.appendChild(c); requestAnimationFrame(() => { c.style.opacity = '1'; });
+});
+await sleep(2400);
 const videoPath = await page.video().path();
 await ctx.close();
 const recordedSec = ((Date.now() - t0) / 1000).toFixed(0);
@@ -180,7 +185,11 @@ await browser.close();
 
 // ---- 3. Convert ----
 const mp4 = path.join(OUT, 'saferedline-demo.mp4');
-const r = spawnSync(FFMPEG, ['-y', '-i', videoPath, '-c:v', 'libx264', '-preset', 'slow', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', '30', '-movflags', '+faststart', '-an', mp4], { stdio: 'ignore' });
+const sped = waitB - waitA > 4;
+const vf = sped
+  ? `[0:v]trim=0:${waitA.toFixed(2)},setpts=PTS-STARTPTS[v0];[0:v]trim=${waitA.toFixed(2)}:${waitB.toFixed(2)},setpts=(PTS-STARTPTS)/3[v1];[0:v]trim=${waitB.toFixed(2)},setpts=PTS-STARTPTS[v2];[v0][v1][v2]concat=n=3:v=1:a=0[v]`
+  : null;
+const r = spawnSync(FFMPEG, ['-y', '-i', videoPath, ...(vf ? ['-filter_complex', vf, '-map', '[v]'] : []), '-c:v', 'libx264', '-preset', 'slow', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', '30', '-movflags', '+faststart', '-an', mp4], { stdio: 'ignore' });
 if (r.status !== 0) { console.error('ffmpeg failed'); process.exit(1); }
 const probe = spawnSync(FFMPEG.replace(/ffmpeg$/, 'ffprobe'), ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', mp4]).stdout?.toString().trim();
 const dur = Number(probe); const size = fs.statSync(mp4).size;
