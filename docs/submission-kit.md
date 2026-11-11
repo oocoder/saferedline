@@ -98,5 +98,5 @@ Tip: put a question as the first reply, e.g. "What clause would you want it to c
 - [ ] Demo video or screenshots recorded
 - [ ] X post live (**human**): says NEAR HACKATHON, tags @NEARProtocol and #NEARHackathon, media attached
 - [ ] Mainnet NEAR payout account ready (**human**)
-- [ ] Hosted demo up (Q-012: screenshots alone are not enough if judges cannot open a demo); keep up until at least 2026-11-18
+- [x] Hosted demo up at https://saferedline.vercel.app (Q-012: screenshots alone are not enough if judges cannot open a demo); keep up until at least 2026-11-18, ideally 2026-11-25
 - [ ] Submit once, before 2026-11-14 23:59 UTC, with projectUrl and demoUrl exact

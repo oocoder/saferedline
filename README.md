@@ -4,9 +4,11 @@ Review confidential contracts and NDAs with an LLM that runs inside a NEAR AI Cl
 
 Built by @AlexBuildsNY at the NEAR Private AI Hackathon NYC (Build City x NEAR Legion), Nov 11 2026. Track: Privacy & Private AI. License: MIT.
 
-> **Live demo (fictional samples only): https://saferedline.vercel.app** (URL to be confirmed after deploy). Honest scope: the hosted demo's own server runs on Vercel and is **not** a TEE, so Vercel can see the sample text; only the bundled fictional samples are accepted (enforced server-side, `403 SAMPLES_ONLY`). The AI call still runs in NEAR's attested enclave with all the verification checks. Review real contracts by running SafeRedline locally (Quickstart below).
+> **Live demo (fictional samples only): https://saferedline.vercel.app** (deployed 2026-11-11). Honest scope: the hosted demo's own server runs on Vercel and is **not** a TEE, so Vercel can see the sample text; only the bundled fictional samples are accepted (enforced server-side, `403 SAMPLES_ONLY`). The AI call still runs in NEAR's attested enclave with all the verification checks. Review real contracts by running SafeRedline locally (Quickstart below).
 
-> **Live analysis needs your own NEAR AI Cloud key** (free to claim at https://nearbuilders.org/dashboard). Twin mode (`npm run twin`) needs no key: it replays recorded real attestation evidence and scripted model outputs to exercise the verification and failure states; the real model needs a key. A hosted demo mode is built (see [Hosted demo mode](#hosted-demo-mode)) but not deployed yet (link TBD).
+> **Live analysis needs your own NEAR AI Cloud key** (free to claim at https://nearbuilders.org/dashboard). Twin mode (`npm run twin`) needs no key: it replays recorded real attestation evidence and scripted model outputs to exercise the verification and failure states; the real model needs a key. The hosted demo is live (see [Hosted demo mode](#hosted-demo-mode)).
+
+**Try it live:** open https://saferedline.vercel.app, click **Verify enclave only** (free, about 2s), load a sample, then click **Analyze privately** (about 25s).
 
 **No key? 3 commands, 60s:** `git clone https://github.com/oocoder/saferedline && cd saferedline && npm ci && npm run twin`
 
@@ -187,7 +189,7 @@ A non-loopback `HOST` is refused unless `HOSTED_DEMO=1`, and a public bind with 
 
 ## Hosted demo mode
 
-Built; a Vercel deployment is planned (URL above is a placeholder until confirmed). `HOSTED_DEMO=1` makes the server a public showcase that only ever processes the bundled fictional samples (anything else returns `403 SAMPLES_ONLY`), with in-memory per-IP and daily rate limits (`429 RATE_LIMITED`) and `mode: 'hosted-demo'` in `/api/health`. Real contracts should still be reviewed locally. Variables: `ALLOWED_HOSTS` (required for a public bind), `TRUST_PROXY`, and the `DEMO_*` limits in the table above.
+Deployed at https://saferedline.vercel.app. `HOSTED_DEMO=1` makes the server a public showcase that only ever processes the bundled fictional samples (anything else returns `403 SAMPLES_ONLY`), with in-memory per-IP and daily rate limits (`429 RATE_LIMITED`) and `mode: 'hosted-demo'` in `/api/health`. Real contracts should still be reviewed locally. Variables: `ALLOWED_HOSTS` (required for a public bind), `TRUST_PROXY`, and the `DEMO_*` limits in the table above.
 
 ```
 docker build -t saferedline:demo .
