@@ -47,6 +47,7 @@ h3{margin:0;font-size:1.1rem}
 label.lbl{display:block;font-weight:600;margin-bottom:6px}
 textarea{width:100%;min-height:220px;resize:vertical;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:12px;font:inherit;font-size:1rem}
 textarea:focus,button:focus-visible,input:focus-visible{outline:3px solid #3b82f6;outline-offset:2px}
+[hidden]{display:none !important}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
 .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:10px 16px;font-weight:600}
 .btn:hover{border-color:var(--ink2)}
@@ -157,6 +158,11 @@ input[type=text]{width:100%;background:var(--bg);color:var(--ink);border:1px sol
       <button class="btn primary" id="analyze" type="button">Analyze privately</button>
       <span class="note" id="inputmsg" role="alert"></span>
     </div>
+    <div id="attacks" class="row" hidden style="margin-top:12px"><span class="note"><strong>Try an attack</strong> (twin only):</span>
+      <button class="btn sm" type="button" data-s="tampered_res">Tamper response</button>
+      <button class="btn sm" type="button" data-s="attestation_failed">Fake enclave (attestation fails)</button>
+      <button class="btn sm" type="button" data-s="wrong_signer">Wrong signer</button>
+    </div>
     <div id="stepper" aria-live="polite">
       <div class="step" data-s="1"><span class="n">1</span><span>Attesting enclave (fresh nonce)</span></div>
       <div class="step" data-s="2"><span class="n">2</span><span>Private inference in TEE</span></div>
@@ -227,7 +233,7 @@ function api(path,opts){
 api('/api/health').then(function(h){
   health=h;
   var m=$('hmode');m.textContent=(h.mode==='twin'?'twin':'live')+' | '+h.model;
-  if(h.mode==='twin')$('twin').classList.add('on');
+  if(h.mode==='twin'){$('twin').classList.add('on');$('attacks').hidden=false}
   if(h.warnings&&h.warnings.length){var wn=$('warn');h.warnings.forEach(function(w){wn.appendChild(el('div',null,'Warning: '+w))});wn.classList.add('on')}
   if(!h.apiKeyConfigured&&h.mode!=='twin'&&!h.twinFakeKey){$('inputmsg').textContent='No NEAR API key configured: analysis unavailable, but you can still verify the enclave.'}
 }).catch(function(){$('hmode').textContent='server unreachable'});
@@ -301,7 +307,8 @@ function renderTrust(att,sig,verified,opts,channel){
   var warnTcb=att&&att.tcbStatus&&att.tcbStatus!=='UpToDate';
   if(ok){
     vb.className='vbadge '+(warnTcb?'warn':'ok');
-    vb.appendChild(document.createTextNode(sig?'Hardware TEE verified, zero data retention':'Enclave verified'));
+    var isTwin=(health&&health.mode==='twin')||(att&&att.evidence==='recorded');
+    vb.appendChild(document.createTextNode(isTwin?(sig?'Verified against RECORDED evidence (twin, simulated model)':'Recorded evidence verified (twin)'):(sig?'Hardware TEE verified, zero data retention':'Enclave verified')));
     if(!sig){var s0=el('span','sub','Attestation only. No contract was sent.');vb.appendChild(s0)}
     if(warnTcb)vb.appendChild(el('span','sub','Warning: TCB status is '+att.tcbStatus+' (not UpToDate).'));
   }else{
@@ -387,13 +394,14 @@ function validate(){
   if(t.length>512*1024){$('inputmsg').textContent='Contract is too large (max 512K characters).';return null}
   $('inputmsg').textContent='';return t;
 }
-$('analyze').addEventListener('click',function(){
+function runAnalyze(script){
   if(busy)return;var t=validate();if(!t)return;
   wipeResults();var my=gen;setBusy(true);
   $('stepper').classList.add('on');setSteps(1);
   // server does all stages in one request; advance indicator on a timer, snap to final state on response
   var t2=setTimeout(function(){if(my===gen)setSteps(2)},1500);
-  api('/api/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:t,source:source})}).then(function(r){
+  var hdr={'content-type':'application/json'};if(script&&health&&health.mode==='twin')hdr['x-twin-script']=script;
+  api('/api/analyze',{method:'POST',headers:hdr,body:JSON.stringify({text:t,source:source})}).then(function(r){
     clearTimeout(t2);if(my!==gen)return;
     if(r.verified){setSteps(3);setTimeout(function(){if(my===gen)setSteps(4)},400)}else setSteps(0,3);
     renderTrust(r.attestation,r.signature,r.verified,{retention:r.retention},r.channel);
@@ -410,7 +418,9 @@ $('analyze').addEventListener('click',function(){
     else if(i.stage==='attestation'||tlsMismatch||i.code==='ATTESTATION_UNAVAILABLE'){var vb=$('vbadge');clear(vb);clear($('tbody'));vb.className='vbadge bad';vb.textContent='UNVERIFIED';vb.appendChild(el('span','sub',i.message));if(!i.contractSent||tlsMismatch){var ns=el('div','vbadge bad','Contract NOT sent');ns.style.marginTop='10px';$('tbody').appendChild(ns)}}
     else if(i.stage==='inference'||i.stage==='signature'){/* leave previous trust panel */}
   }).then(function(){setBusy(false)});
-});
+}
+$('analyze').addEventListener('click',function(){runAnalyze()});
+Array.prototype.forEach.call(document.querySelectorAll('#attacks button'),function(b){b.addEventListener('click',function(){runAnalyze(b.getAttribute('data-s'))})});
 
 function renderAnalysis(r){
   var box=$('analysis');clear(box);var a=r.analysis||{};

@@ -148,7 +148,7 @@ await asideScroll(0); await sleep(400);
 await caption('Anyone can re-run this check. No contract needed.');
 await glide('#verifyonly'); await sleep(500);
 await page.click('#verifyonly');
-await page.waitForFunction(() => /Enclave verified|UNVERIFIED/.test(document.getElementById('vbadge').textContent), null, { timeout: 60000 });
+await page.waitForFunction(() => /^vbadge (ok|warn|bad)/.test(document.getElementById('vbadge').className), null, { timeout: 60000 });
 await sleep(2500);
 await caption('Other tools promise zero retention. SafeRedline proves where it ran.');
 await sleep(5000);
