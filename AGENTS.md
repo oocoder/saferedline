@@ -7,7 +7,8 @@ SafeRedline: local contract/NDA reviewer that sends text only to a NEAR AI Cloud
 ## Where things live
 | Need | Go to |
 |---|---|
-| Local HTTP server, routes, headers | `src/server.mjs` |
+| Request handler, routes, headers (shared by local and hosted) | `src/server.mjs` |
+| Hosted demo entry (Vercel function, samples-only) | `api/index.mjs`, `vercel.json` |
 | NEAR client, analysis pipeline, prompts | `src/near.mjs` |
 | TEE attestation + signature verification | `src/attest.mjs` |
 | CLI proof (live attestation) | `scripts/verify_tee.mjs` |
@@ -42,8 +43,8 @@ SafeRedline: local contract/NDA reviewer that sends text only to a NEAR AI Cloud
 6. Do not claim "verified" in the UI or docs unless the checks in `src/attest.mjs` ran and passed.
 
 ## Which job, which files
-- Change verification logic: `src/attest.mjs` + `tests/attest.offline.test.mjs`, `tests/signature.test.mjs`; update `docs/threat-model.md`.
-- Change API shape: `src/server.mjs`, `src/near.mjs`, `docs/api.md`, `public/index.html`.
+- Change verification logic: `src/attest.mjs` + `tests/attest.offline.test.mjs`, `tests/signature.test.mjs`, `tests/pinning.test.mjs`; update `docs/threat-model.md`.
+- Change API shape: `src/server.mjs`, `src/near.mjs`, `docs/api.md`, `public/index.html`; check `api/index.mjs` (the hosted caller) too.
 - Change UI: `public/index.html` only.
 - Docs or README line links: `README.md`, `docs/`, then run the link check described in `OUTLINE.md`.
 - Submission: `docs/submission-kit.md`. Posting on X and payout account are human-only.

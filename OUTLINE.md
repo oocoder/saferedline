@@ -68,12 +68,13 @@ flowchart LR
 - Shipped 2026-11-11: hackathon submission saved and verified, X demo post live, hosted demo live at https://saferedline.vercel.app ([docs/submission-kit.md](docs/submission-kit.md)).
 - Verified live: every counted attestation and signature check passes over pinned TLS ([README.md](README.md), "Cryptographic verification").
 - Quality gates: offline tests, live and twin E2E, docs link guard, and secret scanning all green; review history in [docs/security-review.md](docs/security-review.md).
-- Until results (Nov 18): keep the repo public, the X post up and the hosted demo running.
+- Until results (Nov 18): keep the repo public, the X post up and the hosted demo running (submission record: [docs/submission-kit.md](docs/submission-kit.md)).
 
 ## Open items
 
 - [ ] Remove em dashes from attestation check-detail strings in `src/attest.mjs` (visible only when a check fails).
 - [ ] Cosmetic HTTP method handling: `HEAD /api/attest` returns 405 while `Allow` lists HEAD.
+- [ ] On 2026-11-19: drop the "Until results" status line and bump `updated`.
 - [ ] Rotate the NEAR AI Cloud key after judging (after 2026-11-18) and update it on Vercel.
 - [ ] Stretch: run the hosted server in a TEE (Phala dstack) to close the "server sees plaintext" gap; the server-attestation route already exists ([docs/api.md](docs/api.md)).
 - [ ] Stretch: progress indicator during analysis; pin compose hashes to published NEAR releases; ICM batch workspace.
