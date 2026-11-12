@@ -65,6 +65,9 @@ textarea:focus,button:focus-visible,input:focus-visible{outline:3px solid #3b82f
 .note{color:var(--ink2);font-size:.9rem}
 .counter{margin-left:auto}
 /* stepper */
+.hint{display:none;margin:10px 2px 0;color:var(--ink2);font-size:14px}
+.hint.on{display:block}
+.elapsed{margin-left:auto;font-variant-numeric:tabular-nums;font-size:13px;color:var(--ink2)}
 #stepper{display:none;margin-top:16px;gap:8px;flex-wrap:wrap}
 #stepper.on{display:flex}
 .step{flex:1 1 180px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--ink2);display:flex;gap:10px;align-items:center}
@@ -172,11 +175,12 @@ input[type=text]{width:100%;background:var(--bg);color:var(--ink);border:1px sol
       <button class="btn sm" type="button" data-s="attestation_failed">Fake enclave (attestation fails)</button>
       <button class="btn sm" type="button" data-s="wrong_signer">Wrong signer</button>
     </div>
-    <div id="stepper" aria-live="polite">
+    <div id="stepper">
       <div class="step" data-s="1"><span class="n">1</span><span>Attesting enclave (fresh nonce)</span></div>
       <div class="step" data-s="2"><span class="n">2</span><span>Private inference in TEE</span></div>
       <div class="step" data-s="3"><span class="n">3</span><span>Verifying enclave signature</span></div>
     </div>
+    <p id="hint" class="hint" aria-live="polite"></p>
     <div id="errbox"></div>
   </div>
 
@@ -318,7 +322,7 @@ $('file').addEventListener('change',function(ev){
 function wipeResults(){
   gen++;
   clear($('analysis'));clear($('errbox'));clear($('ask-out'));clear($('ask-err'));$('q').value='';
-  $('results').hidden=true;$('stepper').classList.remove('on');setSteps(0);
+  $('results').hidden=true;$('stepper').classList.remove('on');setSteps(0);stopTimer();
 }
 $('clear').addEventListener('click',function(){
   $('text').value='';source='paste';$('inputmsg').textContent='';wipeResults();upd();
@@ -431,22 +435,44 @@ function validate(){
   if(t.length>512*1024){$('inputmsg').textContent='Contract is too large (max 512K characters).';return null}
   $('inputmsg').textContent='';return t;
 }
+var tick=null;
+function hintFor(sec){
+  if(sec<3)return 'Checking the enclave\'s hardware proof\u2026';
+  if(sec<10)return 'Your contract is inside the locked room. The model is reading it\u2026';
+  return 'Still working. Long contracts take up to about 30 seconds.';
+}
+function stopTimer(){
+  if(tick){clearInterval(tick);tick=null}
+  var e=$('elapsed');if(e&&e.parentNode)e.parentNode.removeChild(e);
+  var h=$('hint');h.textContent='';h.classList.remove('on');
+}
+function startTimer(){
+  stopTimer();
+  var t0=Date.now(),e=el('span','elapsed','0s'),h=$('hint'),last='';
+  e.id='elapsed';e.setAttribute('aria-hidden','true');
+  function show(){
+    var sec=Math.floor((Date.now()-t0)/1000);e.textContent=sec+'s';
+    var act=document.querySelector('.step.active');if(act&&e.parentNode!==act)act.appendChild(e);
+    var m=hintFor(sec);if(m!==last){last=m;h.textContent=m}
+  }
+  h.classList.add('on');show();tick=setInterval(show,1000);
+}
 function runAnalyze(script){
   if(busy)return;var t=validate();if(!t)return;
   wipeResults();var my=gen;setBusy(true);
-  $('stepper').classList.add('on');setSteps(1);
+  $('stepper').classList.add('on');setSteps(1);startTimer();
   // server does all stages in one request; advance indicator on a timer, snap to final state on response
-  var t2=setTimeout(function(){if(my===gen)setSteps(2)},1500);
+  var t2=setTimeout(function(){if(my===gen){setSteps(2);var a=document.querySelector('.step.active'),e=$('elapsed');if(a&&e)a.appendChild(e)}},1500);
   var hdr={'content-type':'application/json'};if(script&&health&&health.mode==='twin')hdr['x-twin-script']=script;
   api('/api/analyze',{method:'POST',headers:hdr,body:JSON.stringify({text:t,source:source})}).then(function(r){
-    clearTimeout(t2);if(my!==gen)return;
+    clearTimeout(t2);if(my!==gen)return;stopTimer();
     if(r.verified){setSteps(3);setTimeout(function(){if(my===gen)setSteps(4)},400)}else setSteps(0,3);
     renderTrust(r.attestation,r.signature,r.verified,{retention:r.retention,twinSigner:pickTwin(r)},r.channel);
     renderAnalysis(r);
     $('results').hidden=false;
     var rs=$('analysis');setTimeout(function(){if(my===gen)rs.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})},450);
   }).catch(function(e){
-    clearTimeout(t2);if(my!==gen)return;
+    clearTimeout(t2);if(my!==gen)return;stopTimer();
     var i=showError($('errbox'),e);
     var tlsMismatch=/tls|certificate/i.test(i.message||'')&&i.contractSent!==true;
     var stage=({attestation:1,config:1,input:0,inference:2,signature:3})[i.stage];if(stage===undefined)stage=1;
