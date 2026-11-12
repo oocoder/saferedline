@@ -179,7 +179,7 @@ function replayRtmr3(events) {
   return { rtmr3: rtmr.toString('hex'), count, events };
 }
 
-const NRAS_UNEXPECTED = 'NVIDIA NRAS returned unexpected response — failing closed';
+const NRAS_UNEXPECTED = 'NVIDIA NRAS returned unexpected response, failing closed';
 const b64j = (x) => JSON.parse(Buffer.from(x, 'base64url').toString('utf8'));
 
 // Verify an NRAS ES384 JWT against NVIDIA's JWKS; returns claims. Throws on any problem.
@@ -187,17 +187,17 @@ function verifyJwt(jwt, jwks, nonce) {
   const [h, p, sig] = String(jwt).split('.');
   if (!h || !p || !sig) throw new Error(NRAS_UNEXPECTED);
   const head = b64j(h);
-  if (head.alg !== 'ES384') throw new Error('NVIDIA NRAS token uses unexpected algorithm — failing closed');
+  if (head.alg !== 'ES384') throw new Error('NVIDIA NRAS token uses unexpected algorithm, failing closed');
   const jwk = (jwks.keys || []).find((k) => k.kid === head.kid);
-  if (!jwk) throw new Error('NVIDIA NRAS token signed by unknown key — failing closed');
+  if (!jwk) throw new Error('NVIDIA NRAS token signed by unknown key, failing closed');
   const key = crypto.createPublicKey({ key: { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y }, format: 'jwk' });
   if (!crypto.verify('sha384', Buffer.from(`${h}.${p}`), { key, dsaEncoding: 'ieee-p1363' }, Buffer.from(sig, 'base64url'))) {
-    throw new Error('NVIDIA NRAS token signature invalid — failing closed');
+    throw new Error('NVIDIA NRAS token signature invalid, failing closed');
   }
   const c = b64j(p); const now = deps.nowSec();
-  if (typeof c.exp !== 'number' || c.exp < now) throw new Error('NVIDIA NRAS token expired — failing closed');
-  if (typeof c.nbf === 'number' && c.nbf > now + 300) throw new Error('NVIDIA NRAS token not yet valid — failing closed');
-  if (String(c.eat_nonce || '').toLowerCase() !== nonce.toLowerCase()) throw new Error('NVIDIA NRAS token not bound to OUR nonce — failing closed');
+  if (typeof c.exp !== 'number' || c.exp < now) throw new Error('NVIDIA NRAS token expired, failing closed');
+  if (typeof c.nbf === 'number' && c.nbf > now + 300) throw new Error('NVIDIA NRAS token not yet valid, failing closed');
+  if (String(c.eat_nonce || '').toLowerCase() !== nonce.toLowerCase()) throw new Error('NVIDIA NRAS token not bound to OUR nonce, failing closed');
   return c;
 }
 
@@ -215,8 +215,8 @@ export function gpuClaimProblems(c) {
 
 const nrasFetch = async (url, opts, what, timeout = deps.timeouts.nras) => {
   try { return await fetchJson(url, opts, timeout); } catch (e) {
-    if (what === 'attest' && e instanceof HttpError && e.status > 0 && e.status < 500) throw new Error(`NVIDIA NRAS rejected the evidence (${e.message}) — failing closed`);
-    const err = new Error('NVIDIA NRAS unreachable — failing closed'); err.unavailable = 'NVIDIA NRAS'; throw err;
+    if (what === 'attest' && e instanceof HttpError && e.status > 0 && e.status < 500) throw new Error(`NVIDIA NRAS rejected the evidence (${e.message}), failing closed`);
+    const err = new Error('NVIDIA NRAS unreachable, failing closed'); err.unavailable = 'NVIDIA NRAS'; throw err;
   }
 };
 
@@ -242,7 +242,7 @@ async function verifyNvidia(nvidiaPayload, nonce) {
     const c = verifyJwt(overall, keys, nonce);
     for (const t of perGpu) {
       const bad = gpuClaimProblems(verifyJwt(t, keys, nonce));
-      if (bad.length) throw new Error(`NVIDIA GPU token claims failed (${bad.join(', ')}) — failing closed`);
+      if (bad.length) throw new Error(`NVIDIA GPU token claims failed (${bad.join(', ')}), failing closed`);
     }
     return c;
   };
@@ -278,7 +278,7 @@ async function fetchCollateral(quote) {
     if (deps.fallbackPccsUrl && deps.fallbackPccsUrl !== deps.pccsUrl) {
       try { return await withTimeout(deps.getCollateral(deps.fallbackPccsUrl, quote), deps.timeouts.pccs, 'timeout'); } catch { /* fall through */ }
     }
-    const err = new Error('Intel PCCS (collateral) unreachable — failing closed');
+    const err = new Error('Intel PCCS (collateral) unreachable, failing closed');
     err.unavailable = 'Intel PCCS';
     throw err;
   }
@@ -460,7 +460,7 @@ export async function attestModel(model, apiKey) {
     // The attested gateway key is bound to the TLS public key; compare with the certificate we actually reach.
     const want = String(report.gateway_attestation.tls_cert_fingerprint || '').toLowerCase();
     let pass = false, detail, skipped = false;
-    if (deps.evidence === 'recorded') { skipped = true; detail = 'skipped — twin uses plain HTTP (recorded evidence)'; }
+    if (deps.evidence === 'recorded') { skipped = true; detail = 'skipped: twin uses plain HTTP (recorded evidence)'; }
     else if (!want) detail = 'gateway report has no tls_cert_fingerprint';
     else {
       try {

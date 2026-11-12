@@ -195,7 +195,7 @@ describe('review 8: TLS channel binding (gateway)', () => {
     const a = await att({});
     assert.equal(a.evidence, 'recorded');
     assert.equal(tls(a).informational, true); assert.equal(tls(a).pass, false);
-    assert.equal(tls(a).detail, 'skipped — twin uses plain HTTP (recorded evidence)');
+    assert.equal(tls(a).detail, 'skipped: twin uses plain HTTP (recorded evidence)');
     assert.equal(a.verified, true);
   });
   test('live cert == attested fingerprint: tls_bound passes and counts toward verified', async () => {

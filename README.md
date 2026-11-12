@@ -152,9 +152,9 @@ Contract text and model output live only in local variables for the duration of 
 
 - No database, no user-data cache, no session store, no write paths in the server. Evidence: the sentinel test [`tests/pipeline.test.mjs#L254`](tests/pipeline.test.mjs#L254) asserts no writes and no content in logs or errors.
 - Request body read into a variable, dropped after use: [`src/server.mjs#L216`](src/server.mjs#L216) and [`#L226`](src/server.mjs#L226)
-- Logs are metadata only (method, path, status, ms); never content: [`src/server.mjs#L285-L286`](src/server.mjs#L285-L286)
+- Logs are metadata only (method, path, status, ms); never content: [`src/server.mjs#L286-L287`](src/server.mjs#L286-L287)
 - `Cache-Control: no-store` and CSP `connect-src 'self'` (the page cannot send the contract anywhere but your localhost server): [`src/server.mjs#L44-L48`](src/server.mjs#L44-L48)
-- Server binds `127.0.0.1` by default: default in [`createServer` L157](src/server.mjs#L157), [`HOST` L297](src/server.mjs#L297), [`listen` L303](src/server.mjs#L303)
+- Server binds `127.0.0.1` by default: default in [`createServer` L157](src/server.mjs#L157), [`HOST` L300](src/server.mjs#L300), [`listen` L305](src/server.mjs#L305)
 - Attestation gate: the contract is never sent unless attestation verified (`attestOrThrow`): [`src/near.mjs#L184`](src/near.mjs#L184), called at [`#L206`](src/near.mjs#L206) and [`#L233`](src/near.mjs#L233). Contract text is held only in call-local variables in `analyzeContract` ([`#L203`](src/near.mjs#L203)).
 - TLS pinning: [`makePinCheck` `src/attest.mjs#L99`](src/attest.mjs#L99), [`pinnedFetch` `#L113`](src/attest.mjs#L113), [`tls_bound` `#L473`](src/attest.mjs#L473); pin-mismatch handling in [`src/near.mjs#L121`](src/near.mjs#L121)
 - NVIDIA JWT verification: [`verifyJwt` `src/attest.mjs#L186`](src/attest.mjs#L186), [`gpuClaimProblems` `#L205`](src/attest.mjs#L205)
