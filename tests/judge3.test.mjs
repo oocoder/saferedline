@@ -58,7 +58,7 @@ describe('twin honesty', () => {
     const r = await env.post('/api/analyze', { text: CONTRACT });
     assert.equal(r.json.attestation.evidence, 'recorded');
     assert.equal(r.json.twinSignerNote, 'Twin signs responses with a local test key; live mode requires the attested enclave key.');
-    assert.match(r.json.channel.note, /skipped — twin uses plain HTTP \(recorded evidence\)/);
+    assert.match(r.json.channel.note, /skipped: twin uses plain HTTP \(recorded evidence\)/);
     assert.equal(r.json.channel.tlsPinned, false);
     const a = await env.post('/api/ask', { text: CONTRACT, question: 'q?' });
     assert.ok(a.json.twinSignerNote);
