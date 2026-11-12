@@ -197,7 +197,7 @@ const sigArgs = (r, attestation) => ({
   apiKey: cfg.apiKey, attestedSigners: attestation.signingAddresses, pin: pinOf(attestation),
 });
 const pinOf = (a) => (canPin(deps.baseUrl) ? a.gatewayTlsFingerprint || null : null);
-const channelOf = (a) => ({ tlsPinned: !!pinOf(a), fingerprint: pinOf(a), note: canPin(deps.baseUrl) ? (pinOf(a) ? 'chat and signature requests went only to a TLS endpoint matching the attested gateway key' : 'no attested TLS fingerprint; connection NOT pinned') : 'pinning skipped — twin uses plain HTTP (recorded evidence)' });
+const channelOf = (a) => ({ tlsPinned: !!pinOf(a), fingerprint: pinOf(a), note: canPin(deps.baseUrl) ? (pinOf(a) ? 'chat and signature requests went only to a TLS endpoint matching the attested gateway key' : 'no attested TLS fingerprint; connection NOT pinned') : 'pinning skipped: twin uses plain HTTP (recorded evidence)' });
 
 /** Full private pipeline: attest (fresh nonce) -> infer in TEE -> verify response signature. */
 export async function analyzeContract(contractText) {
