@@ -72,8 +72,6 @@ flowchart LR
 
 ## Open items
 
-- [ ] Remove em dashes from attestation check-detail strings in `src/attest.mjs` (visible only when a check fails).
-- [ ] Cosmetic HTTP method handling: `HEAD /api/attest` returns 405 while `Allow` lists HEAD.
 - [ ] On 2026-11-19: drop the "Until results" status line and bump `updated`.
 - [ ] Rotate the NEAR AI Cloud key after judging (after 2026-11-18) and update it on Vercel.
 - [ ] Stretch: run the hosted server in a TEE (Phala dstack) to close the "server sees plaintext" gap; the server-attestation route already exists ([docs/api.md](docs/api.md)).
