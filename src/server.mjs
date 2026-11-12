@@ -255,8 +255,10 @@ export function createHandler({ mode = 'live', host = '127.0.0.1', hostedDemo = 
     const key = `${method} ${pathOnly}`;
     const handler = routes[key];
     guard(req);
-    if (req.method === 'HEAD' && pathOnly !== '/' && pathOnly !== '/api/health') {
-      throw Object.assign(new AppError('HEAD is only supported for / and /api/health', { status: 405, code: 'METHOD_NOT_ALLOWED', stage: 'input' }), { allow: 'GET, HEAD' });
+    const methods = Object.keys(routes).filter((k) => k.slice(k.indexOf(' ') + 1) === pathOnly).map((k) => k.slice(0, k.indexOf(' ')));
+    if (methods.length && (req.method === 'HEAD' ? !(handler && (pathOnly === '/' || pathOnly === '/api/health')) : !handler)) {
+      const allow = [...new Set(methods.flatMap((m) => (m === 'GET' && (pathOnly === '/' || pathOnly === '/api/health') ? ['GET', 'HEAD'] : [m])))].join(', ');
+      throw Object.assign(new AppError(`${req.method} is not supported for ${pathOnly}`, { status: 405, code: 'METHOD_NOT_ALLOWED', stage: 'input' }), { allow });
     }
     if (!handler) throw new AppError('Not found', { status: 404, code: 'NOT_FOUND', stage: 'input' });
     // X-Twin-Script: honoured ONLY in twin mode (never live, never hosted-demo); per-request via AsyncLocalStorage.

@@ -117,7 +117,7 @@ describe('recorded real attestation, offline', () => {
     await boot({ nras: '503' });
     const a = await attestModel(fixture.model, '');
     assert.equal(a.verified, false);
-    assert.match(a.checks.find((c) => c.id === 'gpu' && !c.pass).detail, /NRAS unreachable — failing closed/);
+    assert.match(a.checks.find((c) => c.id === 'gpu' && !c.pass).detail, /NRAS unreachable, failing closed/);
     assert.ok(a.unavailable.includes('NVIDIA NRAS'));
   });
 
@@ -125,7 +125,7 @@ describe('recorded real attestation, offline', () => {
     await boot({ nras: 'bad_shape' });
     const a = await attestModel(fixture.model, '');
     assert.equal(a.verified, false);
-    assert.match(a.checks.find((c) => c.id === 'gpu' && !c.pass).detail, /unexpected response — failing closed/);
+    assert.match(a.checks.find((c) => c.id === 'gpu' && !c.pass).detail, /unexpected response, failing closed/);
     assert.equal(a.unavailable.length, 0);
   });
 

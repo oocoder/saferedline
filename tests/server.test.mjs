@@ -54,11 +54,27 @@ describe('HTTP surface', () => {
       assert.equal(await res.text(), '');
       assert.match(res.headers.get('cache-control'), /no-store/);
     }
-    for (const p of ['/api/samples', '/api/analyze', '/api/attest', '/api/nope']) {
+    for (const [p, allow] of [['/api/samples', 'GET'], ['/api/analyze', 'POST'], ['/api/attest', 'GET']]) {
       const r = await fetch(env.base + p, { method: 'HEAD' });
       assert.equal(r.status, 405, p);
-      assert.equal(r.headers.get('allow'), 'GET, HEAD');
+      assert.equal(r.headers.get('allow'), allow, p);
     }
+    assert.equal((await fetch(env.base + '/api/nope', { method: 'HEAD' })).status, 404);
+  });
+  test('unsupported methods on known paths: 405 + truthful Allow; unknown path stays 404', async () => {
+    env = await boot();
+    for (const m of ['PUT', 'DELETE', 'PATCH']) {
+      for (const [p, allow] of [['/api/attest', 'GET'], ['/api/analyze', 'POST'], ['/api/health', 'GET, HEAD'], ['/', 'GET, HEAD']]) {
+        const r = await fetch(env.base + p, { method: m});
+        assert.equal(r.status, 405, `${m} ${p}`);
+        assert.equal(r.headers.get('allow'), allow, `${m} ${p}`);
+        assert.equal((await r.json()).error.code, 'METHOD_NOT_ALLOWED');
+      }
+      assert.equal((await fetch(env.base + '/api/nope', { method: m })).status, 404);
+    }
+    const r = await fetch(env.base + '/api/attest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    assert.equal(r.status, 405);
+    assert.equal(r.headers.get('allow'), 'GET');
   });
   test('error envelope: input validation and routing', async () => {
     env = await boot();
